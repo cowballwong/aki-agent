@@ -1,0 +1,34 @@
+Metadata-Version: 2.4
+Name: aki-agent
+Version: 0.29.0
+Summary: A general-purpose personal AI agent you install on your own machine.
+License: MIT
+Requires-Python: >=3.10
+Requires-Dist: PyYAML<7,>=6.0
+Provides-Extra: dashboard
+Requires-Dist: Flask<4,>=3.1; extra == "dashboard"
+Requires-Dist: Jinja2<4,>=3.1; extra == "dashboard"
+Requires-Dist: Werkzeug<4,>=3.1; extra == "dashboard"
+Requires-Dist: click>=8.1; extra == "dashboard"
+Requires-Dist: itsdangerous>=2.2; extra == "dashboard"
+Requires-Dist: blinker>=1.9; extra == "dashboard"
+Requires-Dist: MarkupSafe>=3.0; extra == "dashboard"
+Provides-Extra: secrets
+Requires-Dist: keyring<26,>=25.0; extra == "secrets"
+Provides-Extra: session
+Requires-Dist: psutil<8,>=7.0; extra == "session"
+Provides-Extra: chat
+Requires-Dist: Telethon<2,>=1.36; extra == "chat"
+Provides-Extra: full
+Requires-Dist: Flask<4,>=3.1; extra == "full"
+Requires-Dist: Jinja2<4,>=3.1; extra == "full"
+Requires-Dist: Werkzeug<4,>=3.1; extra == "full"
+Requires-Dist: click>=8.1; extra == "full"
+Requires-Dist: itsdangerous>=2.2; extra == "full"
+Requires-Dist: blinker>=1.9; extra == "full"
+Requires-Dist: MarkupSafe>=3.0; extra == "full"
+Requires-Dist: keyring<26,>=25.0; extra == "full"
+Requires-Dist: psutil<8,>=7.0; extra == "full"
+Requires-Dist: Telethon<2,>=1.36; extra == "full"
+Provides-Extra: dev
+Requires-Dist: pytest>=8.0; extra == "dev"

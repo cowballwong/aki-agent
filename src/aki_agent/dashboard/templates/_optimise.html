@@ -1,0 +1,179 @@
+{# Self-Optimize.
+
+   Its own partial rather than another branch in `history.html`: that file is
+   five tabs now, and a page you cannot find the middle of is the thing this
+   whole evening has been undoing. #}
+
+<p class="freshness">
+  Every time you accept, edit or reject something, that verdict is kept. This
+  uses <b>DSPy</b> to rewrite the guidance from those corrections &mdash;
+  trying candidate wordings against your own edits and keeping what matches
+  them best.
+</p>
+
+{# THE SENTENCE THAT HAS TO BE HERE.
+   "Learn from You" is rule-based, local, and costs nothing; its own module
+   defends that trade at length. This is the other road. The maintainer asked for it
+   half an hour after being told exactly this, so it is a choice he made
+   knowingly -- the page still has to say it where the choice is made, not
+   afterwards. #}
+<div class="note">
+  Unlike <a href="/knowledge?tab=learned">Learn from You</a>, this sends your
+  corrections to a model. Pointed at Ollama on this computer, nothing leaves
+  the machine. Pointed at an API, it does.
+</div>
+
+{% if not optimise.available %}
+  <p><span class="badge bad">not installed</span></p>
+  <form method="post" action="/memory/optimise"
+        data-working="Installing DSPy"
+        data-working-note="A few minutes. It brings no model with it.">
+    <input type="hidden" name="token" value="{{ token }}">
+    <input type="hidden" name="action" value="install">
+    <button type="submit" class="primary">Install DSPy</button>
+  </form>
+
+{% else %}
+  <p>
+    {% if optimise.on %}<span class="badge on">on</span>
+      &mdash; runs at <b>{{ optimise.at }}</b>
+    {% else %}<span class="badge">off</span>{% endif %}
+    &middot; {{ optimise.verdicts }} verdict(s) recorded
+  </p>
+
+  {% if optimise.verdicts < optimise.enough %}
+    <div class="note">
+      It needs about {{ optimise.enough }} verdicts before there is anything to
+      learn that is not noise. Prose fitted to noise reads exactly like
+      insight, which is why it waits rather than trying.
+    </div>
+  {% endif %}
+
+  <form method="post" action="/memory/optimise">
+    <input type="hidden" name="token" value="{{ token }}">
+    <input type="hidden" name="action" value="save">
+
+    <label>Where it runs
+      <select name="provider" id="optprovider">
+        {% for one in optimise.providers %}
+          <option value="{{ one.key }}"
+                  {{ 'selected' if optimise.provider == one.key }}>
+            {{ one.label }}</option>
+        {% endfor %}
+      </select>
+    </label>
+    {% for one in optimise.providers %}
+      <p class="freshness optwhy" data-for="{{ one.key }}">{{ one.why }}</p>
+    {% endfor %}
+
+    <div class="optfields" data-for="ollama">
+      {% if not optimise.ollama_running %}
+        <p class="freshness warn">Ollama is not answering on this computer, so
+          there is nothing to list. Start it and reload this page.</p>
+      {% else %}
+        <label>Which local model
+          <select name="model_local">
+            <option value="">&mdash; pick one &mdash;</option>
+            {% for one in optimise.local_models %}
+              <option value="{{ one.name }}"
+                      {{ 'selected' if optimise.model == one.name }}>
+                {{ one.name }}{% if one.cloud %} — Ollama's cloud, not this machine{% endif %}
+              </option>
+            {% endfor %}
+          </select>
+        </label>
+        {# MARKED, because Ollama lists its hosted models in exactly the same
+           place as the ones on your disk -- the maintainer's own machine has one
+           sitting between two local ones. Picking it quietly makes "nothing
+           leaves the machine" false and starts spending metered credit, with
+           nothing on screen to say either. #}
+        <p class="freshness">Anything marked as Ollama&rsquo;s cloud is not
+          local: it leaves the machine, and it is metered.</p>
+      {% endif %}
+    </div>
+
+    <div class="optfields" data-for="anthropic openai">
+      <label>Model name
+        <input name="model_api" value="{{ optimise.model }}"
+               placeholder="claude-sonnet-5 / gpt-4.1-mini">
+      </label>
+    </div>
+
+    <div class="row tight">
+      <label>Run at
+        <input type="number" name="hour" min="0" max="23"
+               value="{{ optimise.hour }}" style="width:5rem"></label>
+      <label>:
+        <input type="number" name="minute" min="0" max="59"
+               value="{{ optimise.minute }}" style="width:5rem"></label>
+    </div>
+
+    <label class="tickline">
+      <input type="checkbox" name="on" {{ 'checked' if optimise.on }}>
+      Run it on that schedule
+    </label>
+
+    <button type="submit" class="primary">Save</button>
+  </form>
+
+  {# Only for the local option --
+     there is nothing to download for an API. #}
+  <div class="optfields" data-for="ollama">
+    <h2 class="section">Get a local model</h2>
+    <form method="post" action="/memory/optimise" class="row tight"
+          data-working="Downloading the model"
+          data-working-note="Gigabytes, over your connection. Ollama keeps
+                             going even if you leave this page.">
+      <input type="hidden" name="token" value="{{ token }}">
+      <input type="hidden" name="action" value="pull">
+      <select name="pull">
+        {% for one in optimise.suggested %}
+          <option value="{{ one.name }}">{{ one.name }} &mdash; {{ one.why }}</option>
+        {% endfor %}
+      </select>
+      <button type="submit">Download it</button>
+    </form>
+  </div>
+
+  <h2 class="section">Now</h2>
+  <form method="post" action="/memory/optimise" class="inline"
+        data-working="Optimising"
+        data-working-note="Reading your verdicts and trying wordings against
+                           them. Minutes, on a local model.">
+    <input type="hidden" name="token" value="{{ token }}">
+    <input type="hidden" name="action" value="now">
+    <button type="submit">Run it now</button>
+  </form>
+
+  <p class="freshness">
+    A run only overwrites guidance that scores better against corrections it
+    was not shown. &ldquo;It finished&rdquo; is not &ldquo;it learned&rdquo;
+    &mdash; so it reports which of the two happened, and changes nothing on
+    the strength of having completed.
+  </p>
+{% endif %}
+
+<script>
+/* Only the fields the chosen provider uses.
+ *
+ * The same pattern as the Event tab on Schedule. A form showing an API model
+ * box next to an Ollama dropdown is a form asking one question twice, and
+ * whichever one you fill in, you cannot tell which one counted. */
+(function () {
+  var chooser = document.getElementById('optprovider');
+  if (!chooser) { return; }
+
+  function follow() {
+    var want = chooser.value;
+    ['.optfields', '.optwhy'].forEach(function (which) {
+      var groups = document.querySelectorAll(which);
+      for (var i = 0; i < groups.length; i++) {
+        var wants = (groups[i].getAttribute('data-for') || '').split(' ');
+        groups[i].hidden = wants.indexOf(want) === -1;
+      }
+    });
+  }
+  chooser.addEventListener('change', follow);
+  follow();
+})();
+</script>

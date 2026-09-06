@@ -1,0 +1,169 @@
+{# Subscriptions it can read, and the account it can write to. Two
+   different powers over the same diary, so they stay two sections. #}
+<h2><span class="ico">&#9200;</span>Calendar</h2> {{ howto('calendar-ics') }}
+<div class="card">
+  <p class="sub">
+    <b>Reading</b> takes a subscription address (ICS) from any calendar
+    service &mdash; two minutes, no account, and it is read-only by nature:
+    that address is a file to download, and there is no &ldquo;write&rdquo; in
+    it at all. For <b>adding, moving and cancelling</b>, see Google below.
+  </p>
+
+  {% if calendars %}
+    <table>
+      <thead><tr><th>Calendar</th><th>Address</th><th></th></tr></thead>
+      <tbody>
+      {% for calendar in calendars %}
+        <tr>
+          <td><b>{{ calendar.name }}</b></td>
+          <td>{% if calendar.subscribed %}<span class="badge on">stored</span>
+              {% else %}<span class="badge bad">missing</span>{% endif %}</td>
+          <td class="right">
+            <button type="button" class="link" onclick="editCalendar(this)"
+                    data-name="{{ calendar.name }}">replace address</button>
+            <form method="post" action="/connections/calendar/forget" class="inline"
+                  onsubmit="return confirm('Unsubscribe from {{ calendar.name | js }}? Its address is deleted from this computer.');">
+              <input type="hidden" name="token" value="{{ token }}">
+              <input type="hidden" name="name" value="{{ calendar.name }}">
+              <button type="submit" class="link danger">remove</button>
+            </form>
+          </td>
+        </tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  {% else %}
+    <p class="empty">No calendar subscribed yet.</p>
+  {% endif %}
+
+  {% if calendars %}
+  <details class="change">
+    <summary>Subscribe to another calendar</summary>
+  {% endif %}
+  {# reported 2026-08-20, looking at Google's settings page with four addresses
+     on it: *"which one is the subscribtion link?"* — and he built this. The
+     page names none of them, so the honest fix is to name them here, at the
+     moment somebody is standing in front of the same screen, rather than in
+     documentation nobody has open. #}
+  <details class="change">
+    <summary>Where do I find that address?</summary>
+    <div class="sub">
+      <p><b>Google Calendar</b> — Settings &rsaquo; the calendar in the left
+      list &rsaquo; <b>Integrate calendar</b>. That page offers four things and
+      you want the last one: <b>Secret address in iCal format</b> (click the
+      eye to reveal it).</p>
+      <ul>
+        <li><i>Public URL to this calendar</i> — a web page, not data.</li>
+        <li><i>Embed code</i> — HTML for a website.</li>
+        <li><i>Public address in iCal format</i> — the right format, but only
+        works if you make the whole calendar public to the world.</li>
+        <li><b>Secret address in iCal format</b> — the only one that works
+        without publishing anything. This one.</li>
+      </ul>
+      <p><b>Outlook.com</b> — Settings &rsaquo; Calendar &rsaquo; Shared
+      calendars &rsaquo; Publish a calendar, then copy the <b>ICS</b> link
+      (not the HTML one).</p>
+      <p><b>Apple / iCloud</b> — the Calendar app &rsaquo; right-click the
+      calendar &rsaquo; Share Calendar &rsaquo; tick Public Calendar, then
+      copy the address.</p>
+      <p><b>Fastmail</b> — Calendar settings &rsaquo; the calendar &rsaquo;
+      <b>Secret URL</b>.</p>
+      <p>Whichever you use, that address is a key: anyone holding it can read
+      the whole calendar without a password. If you ever paste it somewhere by
+      mistake, your calendar's settings page has a <b>Reset</b> that makes the
+      old one dead immediately.</p>
+    </div>
+  </details>
+
+  <form method="post" action="/connections/calendar" id="calform">
+    <input type="hidden" name="token" value="{{ token }}">
+    <label>Name <input type="text" name="name" placeholder="Work" required></label>
+    <label>Subscription address
+      <input type="url" name="url" required>
+      {# "not a file" corrected 2026-09-05: `secrets` falls back to
+         `secrets.json` where no keyring backend exists. #}
+      <span class="sub">Treated as a secret: anyone holding it can read the
+      whole calendar, so it goes to the credential store rather than sitting
+      in your settings.</span>
+    </label>
+    <button type="submit">Subscribe</button>
+  </form>
+  {% if calendars %}</details>{% endif %}
+</div>
+
+
+<h2><span class="ico">&#9998;</span>Google Calendar &mdash; adding and changing</h2> {{ howto('google-oauth') }}
+<div class="card">
+  {# reported 2026-08-20: "要呀,要有 option 可以寫". Offered *beside* the
+     subscription rather than instead of it: most people want the two-minute
+     read-only one, and somebody who wants their assistant to book things
+     should be told plainly what the difference costs before starting. #}
+  <p class="sub">
+    Signs in with your own Google account, so the assistant can put things in
+    your diary, move them and cancel them. It asks Google for
+    <b>one permission &mdash; read and change events</b>: not to create or
+    delete calendars, and nothing outside Calendar.
+  </p>
+
+  {% if google.problem %}
+    <div class="note bad">{{ google.problem }} &mdash; that is a fault in the
+      check, not necessarily in your connection.</div>
+  {% elif google.connected %}
+    <p><span class="badge on">connected</span>
+      Your assistant can read and change events.</p>
+    {# Corrected 2026-09-05. The `confirmed=True` gate in
+       `connectors/google_calendar.py` is real, but its only callers are in
+       `cli.py` and they pass it whenever `--yes` is on the command line --
+       the assistant confirms to itself. Presenting a house rule as an
+       enforced prompt is the overstatement `_conn_mail.html` avoids. #}
+    <p class="sub">Your assistant's house rules tell it to ask before it
+      changes anything &mdash; setting this up is not a standing permission to
+      rearrange your week. That is a rule it follows, not a lock, so keep an
+      eye on it the way you would with anyone new.</p>
+    <form method="post" action="/connections/google/disconnect" class="inline"
+          onsubmit="return confirm('Disconnect Google Calendar? The sign-in is deleted from this computer.');">
+      <input type="hidden" name="token" value="{{ token }}">
+      {# Named, not left to the route's default: these buttons are shared
+         with Gmail now, and a default is a thing to be wrong about later. #}
+      <input type="hidden" name="service" value="calendar">
+      <button type="submit" class="danger">Disconnect</button>
+    </form>
+    <p class="sub">To withdraw the permission at Google as well:
+      <a href="{{ google.revoke }}" target="_blank" rel="noopener">
+        your Google permissions page</a>.</p>
+  {% else %}
+    <p><span class="badge bad">not connected</span>
+      {% if google.has_client %}Client saved &mdash; press Connect.
+      {% else %}Needs a one-off Google setup, about ten minutes.{% endif %}</p>
+
+    <details class="change" {% if not google.has_client %}open{% endif %}>
+      <summary>What this involves</summary>
+      <pre class="plain">{{ google.how }}</pre>
+    </details>
+
+    <form method="post" action="/connections/google/credentials">
+      <input type="hidden" name="token" value="{{ token }}">
+      <label>Client ID
+        <input name="client_id" placeholder="…apps.googleusercontent.com"></label>
+      <label>Client secret
+        <input type="password" name="client_secret" data-secret
+               autocomplete="new-password">
+        <span class="sub">Both go to this computer's credential store, never
+        to a settings file.</span>
+      </label>
+      <button type="submit">Save</button>
+    </form>
+
+    {% if google.has_client %}
+      <form method="post" action="/connections/google/connect">
+        <input type="hidden" name="token" value="{{ token }}">
+        <input type="hidden" name="service" value="calendar">
+        <button type="submit" class="primary">Connect</button>
+        <span class="sub">Opens Google. It will warn you the app is
+          unverified &mdash; it is your own project, and you are the
+          publisher.</span>
+      </form>
+    {% endif %}
+  {% endif %}
+</div>
+

@@ -1,0 +1,12 @@
+{% extends "base.html" %}
+{% block heading %}Rules &amp; limits{% endblock %}
+{% block body %}
+<p class="freshness">Two different things, deliberately on one page: what you have told it to do, and what it will refuse whatever anybody says.</p>
+
+<h2 class="section">Your rules — followed, not enforced</h2>
+{% include "_rules.html" %}
+
+<h2 class="section">Hard limits — enforced in code, not editable</h2>
+{% include "_safety.html" %}
+
+{% endblock %}

@@ -1,0 +1,19 @@
+{
+  "$schema": "https://anthropic.com/claude-code/marketplace.schema.json",
+  "name": "aki-agent",
+  "description": "Aki Agent — a general-purpose personal assistant that installs on your own machine and configures itself by asking you questions.",
+  "owner": {
+    "name": "Anzon Wong"
+  },
+  "plugins": [
+    {
+      "name": "aki-agent",
+      "description": "Aki Agent — a general-purpose personal assistant you install on your own machine. Answer a few questions and it configures itself around your work — no API key, no server, no Docker. Runs on your own Claude subscription.",
+      "author": {
+        "name": "Anzon Wong"
+      },
+      "category": "productivity",
+      "source": "./"
+    }
+  ]
+}

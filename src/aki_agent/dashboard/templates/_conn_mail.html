@@ -1,0 +1,160 @@
+{# The accounts it reads, and the table of where to get an app password
+   for each provider -- which was three sections away from the form it
+   is needed in. #}
+<h2><span class="ico">&#9993;</span>Email</h2> {{ howto('mail-app-password') }}
+<div class="card">
+  <p class="sub">
+    Reached over IMAP &mdash; with an app password, or with a Google sign-in
+    for Gmail (below). Sending always asks first, every message.
+  </p>
+
+  {% if accounts %}
+    <table>
+      <thead><tr><th>Account</th><th>Reads from</th><th>Password</th><th>Sending</th><th></th></tr></thead>
+      <tbody>
+      {% for account in accounts %}
+        <tr>
+          <td>{{ account.label }}</td>
+          <td class="blank">{{ account.imap_host }}</td>
+          <td>{% if account.google %}<span class="badge on">Google sign-in</span>
+              {% elif account.has_password %}<span class="badge on">stored</span>
+              {% else %}<span class="badge bad">not set</span>{% endif %}</td>
+          <td>{% if account.may_send %}allowed{% else %}drafts only{% endif %}</td>
+          <td class="right">
+            {# Editing is the same form as adding: it keys on the address, so
+               re-submitting one that is already here replaces it. What was
+               missing was any way to open it with the values already in. #}
+            <button type="button" class="link"
+                    onclick="editMail(this)"
+                    data-address="{{ account.address }}"
+                    data-label="{{ account.label }}"
+                    data-imap="{{ account.imap_host }}"
+                    data-send="{{ '1' if account.may_send else '0' }}">edit</button>
+            <form method="post" action="/connections/mail/forget" class="inline"
+                  onsubmit="return confirm('Disconnect {{ account.address | js }}? The app password stored on this computer is deleted too.');">
+              <input type="hidden" name="token" value="{{ token }}">
+              <input type="hidden" name="address" value="{{ account.address }}">
+              <button type="submit" class="link danger">remove</button>
+            </form>
+          </td>
+        </tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  {% else %}
+    <p class="empty">No account connected yet.</p>
+  {% endif %}
+
+  {% if accounts %}
+  <details class="change">
+    <summary>Connect another account</summary>
+  {% endif %}
+  <form method="post" action="/connections/mail" id="mailform">
+    <input type="hidden" name="token" value="{{ token }}">
+    <label>Email address <input type="email" name="address" required></label>
+    <label>Name it (optional)
+      <input type="text" name="label" placeholder="Work"></label>
+    <label>App password
+      <input type="password" name="password" autocomplete="new-password">
+      {# Corrected 2026-09-05. "Never written to a file here" is false on a
+         machine with no working keyring backend: `secrets.set_secret` falls
+         back to `secrets.json` in the app folder. The Connections page said
+         so a few lines away, so the page contradicted itself. #}
+      <span class="sub">Goes into this computer's credential store, and is
+      never shown back to you. On a machine with no credential store it falls
+      back to a file in the assistant's own folder. When editing, leave it
+      blank to keep the one already stored.</span>
+    </label>
+    {# The handler has read `smtp_host` since it was written and this form
+       never had the box, so it always fell back to the guessed provider --
+       and the two ports could not be set from anywhere at all, in the form
+       or the CLI, while `mail.py` read them on every connection. Anyone
+       whose server is not on 993/587 -- a self-hosted mailbox, a company
+       server, anything behind a proxy -- could not connect and got a
+       timeout rather than a reason. Found 2026-09-06. #}
+    <label>Reads from (leave blank for the usual one)
+      <input type="text" name="imap_host" placeholder="imap.example.com"></label>
+    <label>Sends through (leave blank for the usual one)
+      <input type="text" name="smtp_host" placeholder="smtp.example.com"></label>
+    <label>Ports (leave blank unless your provider says otherwise)
+      <span class="pair">
+        <input type="number" name="imap_port" placeholder="993" min="1"
+               max="65535">
+        <input type="number" name="smtp_port" placeholder="587" min="1"
+               max="65535">
+      </span></label>
+    <label><input type="checkbox" name="may_send"> May send, not just draft</label>
+    <button type="submit">Connect</button>
+  </form>
+  {% if accounts %}</details>{% endif %}
+</div>
+
+
+<h2><span class="ico">&#9993;</span>Providers</h2>
+<div class="card">
+  <p class="sub">Where to get an app password, if you need one:</p>
+  <table>
+    <thead><tr><th>Provider</th><th>Reads from</th><th>App password</th></tr></thead>
+    <tbody>
+    {% for provider in mail_providers %}
+      {% if provider.key != 'other' %}
+      <tr>
+        <td>{{ provider.name }}</td>
+        <td class="blank">{{ provider.imap_host }}</td>
+        <td class="blank">{{ provider.app_password_url }}</td>
+      </tr>
+      {% endif %}
+    {% endfor %}
+    </tbody>
+  </table>
+</div>
+
+{# Asked for on 2026-08-29: only Calendar offered OAuth, and Email and
+   Google Drive were expected to offer it too.
+
+   This is the same sign-in the Calendar section uses -- same client, same
+   PKCE flow, same credential store -- asking for a different permission. The
+   two grants are separate on purpose: connecting a diary must not hand over
+   a mailbox, so this button neither implies nor enables the other one.
+
+   Nothing below this changes how mail is read. It is still IMAP; only the
+   proof of identity changes, from an app password to a token. That is why
+   this was worth doing rather than moving to the Gmail API: same permission,
+   none of the second implementation. #}
+<h2><span class="ico">&#9993;</span>Gmail without an app password</h2> {{ howto('gmail-oauth') }}
+<div class="card">
+  {% if gmail.problem %}
+    <p><span class="badge bad">{{ gmail.problem }}</span></p>
+  {% elif gmail.connected %}
+    <p>Signed in{% if gmail.address %} as <code>{{ gmail.address }}</code>{% endif %}.
+       <span class="badge on">on</span></p>
+    <p class="freshness">
+      The mailbox at that address signs in with this token instead of an app
+      password. Signing out here only affects this computer &mdash; to
+      withdraw the permission at Google as well, remove it at
+      <span class="blank">{{ gmail.revoke }}</span>.
+    </p>
+    <form method="post" action="/connections/google/disconnect" class="inline"
+          onsubmit="return confirm('Sign this computer out of that mailbox?');">
+      <input type="hidden" name="token" value="{{ token }}">
+      <input type="hidden" name="service" value="gmail">
+      <button type="submit">Sign out</button>
+    </form>
+  {% elif gmail.has_client %}
+    <p class="freshness">
+      Uses the Google app you already registered for Calendar. Google will ask
+      you to allow access to Gmail; that is full access to that mailbox, which
+      is the only permission Google offers for IMAP.
+    </p>
+    <form method="post" action="/connections/google/connect">
+      <input type="hidden" name="token" value="{{ token }}">
+      <input type="hidden" name="service" value="gmail">
+      <button type="submit">Sign in with Google</button>
+    </form>
+  {% else %}
+    <p class="freshness">
+      Needs a Google app first &mdash; the same one the Calendar tab asks for.
+      Set it up there once and this button appears.
+    </p>
+  {% endif %}
+</div>

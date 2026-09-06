@@ -1,0 +1,203 @@
+{#
+  A workspace's panels.
+
+  The drawing is inline SVG produced on the server. No chart library is
+  reachable -- the dashboard has to work with the machine offline and ships no
+  JavaScript for this -- and a chart that only exists once a CDN answers is a
+  chart that is blank on a site with no signal.
+
+  Every colour comes from `--accent`, the same single value the rest of the
+  shell derives from, so a panel cannot clash with the theme the user chose.
+  The CSS lives here rather than in base.html because it is the only page that
+  uses it, and a subsystem whose styles sit three hundred lines away from its
+  markup is one nobody edits with confidence.
+#}
+<style>
+.panel { border: var(--hair) solid var(--border); border-radius: var(--radius);
+         background: var(--surface); padding: 0.85rem 0.95rem 0.95rem;
+         margin: 0 0 0.9rem; }
+.panel > h3 { margin: 0; font: 500 14px/1.3 var(--sans); letter-spacing: -0.01em; }
+.panel .cap { color: var(--muted); font: 11px/1.6 var(--mono); margin: 0.15rem 0 0.7rem; }
+.panel .scroll { overflow-x: auto; }
+.panel svg { display: block; width: 100%; min-width: 620px; height: auto; }
+
+/* The chart's own vocabulary. `late` is the only thing allowed a second
+   colour, because it is the only thing on the page a person must not miss. */
+.gantt .band   { fill: color-mix(in srgb, var(--fg) 4%, transparent); }
+.gantt .grid   { stroke: var(--border); stroke-width: 1; }
+.gantt .tick   { fill: var(--muted); font: 9px var(--mono); }
+.gantt .lab    { fill: var(--fg); font: 11px var(--sans); }
+.gantt .who    { fill: var(--muted); font: 9px var(--mono); }
+.gantt .bar    { fill: var(--accent); rx: 3; }
+.gantt .bar.done { fill: color-mix(in srgb, var(--accent) 62%, var(--surface)); }
+.gantt .bar.late { fill: var(--warning); }
+.gantt .base   { fill: color-mix(in srgb, var(--fg) 22%, transparent); }
+.gantt .slip   { fill: var(--warning); font: 9px var(--mono); }
+.gantt .today  { stroke: var(--error); stroke-width: 1; stroke-dasharray: 3 3; }
+.gantt .todaylab { fill: var(--error); font: 9px var(--mono); }
+.gantt .unsourced { fill: url(#hatch); stroke: var(--warning); stroke-width: 1; }
+
+.moneyline { display: grid; grid-template-columns: 250px 1fr; gap: 0 0.8rem;
+             align-items: center; padding: 0.35rem 0; border-top: 1px solid var(--border); }
+.moneyline:first-of-type { border-top: 0; }
+.moneyline .nm { font: 11px/1.4 var(--sans); }
+.moneyline .nm small { display: block; color: var(--muted); font: 9px var(--mono); }
+.moneyline .track { display: grid; gap: 3px; min-width: 0; }
+/* Two columns, not a flex row: the bar is a proportion of the FIRST column,
+   so a wide bar can never push its own figure off the edge of the panel --
+   which is exactly what it did the first time this was drawn. */
+.moneyline .b { display: grid; grid-template-columns: minmax(0, 1fr) auto;
+                align-items: center; gap: 0.5rem; }
+.moneyline .b .t { min-width: 0; }
+.moneyline .b i { height: 9px; border-radius: 2px; display: block;
+                  background: color-mix(in srgb, var(--accent) 30%, var(--surface)); }
+.moneyline .b.k1 i { background: color-mix(in srgb, var(--accent) 28%, var(--surface)); }
+.moneyline .b.k2 i { background: color-mix(in srgb, var(--accent) 60%, var(--surface)); }
+.moneyline .b.k3 i { background: var(--accent); }
+.moneyline .b.over i { background: var(--warning); }
+.moneyline .b span { font: 10px/1 var(--mono); color: var(--muted); white-space: nowrap; }
+.moneyline .b b { font: 10px/1 var(--mono); color: var(--warning); }
+.moneytotals { display: flex; flex-wrap: wrap; gap: 0.9rem; margin-top: 0.6rem;
+               padding-top: 0.55rem; border-top: 1px solid var(--border); }
+.moneytotals div { font: 12px/1.4 var(--mono); }
+.moneytotals div span { display: block; color: var(--muted);
+                        font: 9px/1.6 var(--mono); text-transform: uppercase;
+                        letter-spacing: 0.08em; }
+
+.panel table { width: 100%; border-collapse: collapse; }
+.panel th { text-align: left; color: var(--muted); font: 9px/1.8 var(--mono);
+            text-transform: uppercase; letter-spacing: 0.08em;
+            border-bottom: 1px solid var(--border); padding: 0.2rem 0.5rem 0.2rem 0; }
+.panel td { padding: 0.3rem 0.5rem 0.3rem 0; font: 11px/1.5 var(--sans);
+            border-bottom: 1px solid color-mix(in srgb, var(--border) 55%, transparent); }
+.panel td.mono { font-family: var(--mono); font-size: 10px; }
+.panel .trace { color: var(--muted); font: 9px/1.6 var(--mono); margin: 0.5rem 0 0; }
+.panel .big { font: 600 26px/1.1 var(--display); }
+</style>
+
+<svg width="0" height="0" style="position:absolute" aria-hidden="true"><defs>
+  <pattern id="hatch" width="5" height="5" patternTransform="rotate(45)"
+           patternUnits="userSpaceOnUse">
+    <rect width="5" height="5" fill="transparent"></rect>
+    <line x1="0" y="0" x2="0" y2="5" stroke="var(--warning)" stroke-width="2"></line>
+  </pattern>
+</defs></svg>
+
+{% for shown in panels %}
+{% set panel = shown.panel %}
+<section class="panel">
+  <h3>{{ panel.title }}</h3>
+
+  {% if shown.kind == "gantt" and not shown.is_empty %}
+    {% set chart = shown.gantt %}
+    <p class="cap">{{ shown.caption }}</p>
+    <div class="scroll">
+    <svg class="gantt" viewBox="0 0 {{ chart.width }} {{ chart.height }}"
+         role="img" aria-label="{{ panel.title }}: {{ shown.caption }}">
+      {# Bands first, so the gridlines and bars sit on top of them. A chart
+         thirteen rows deep is read across, and the eye needs a rail. #}
+      {% for bar in chart.bars %}
+        {% if loop.index0 % 2 %}
+          <rect class="band" x="0" y="{{ bar.y }}" width="{{ chart.width }}"
+                height="{{ chart.row_height }}"></rect>
+        {% endif %}
+      {% endfor %}
+
+      {% for tick in chart.ticks %}
+        <line class="grid" x1="{{ tick.x }}" y1="20" x2="{{ tick.x }}"
+              y2="{{ chart.height - 6 }}"></line>
+        <text class="tick" x="{{ tick.x + 3 }}" y="14">{{ tick.label }}{% if tick.year %} {{ tick.year }}{% endif %}</text>
+      {% endfor %}
+
+      {% for bar in chart.bars %}
+        <text class="lab" x="0" y="{{ bar.y + 12 }}">{{ bar.label|truncate(30, True, '…') }}</text>
+        <text class="who" x="0" y="{{ bar.y + 23 }}">{{ bar.item_title|truncate(34, True, '…') }}</text>
+        {% if bar.baseline_width %}
+          <rect class="base" x="{{ bar.baseline_x }}" y="{{ bar.y + 18 }}"
+                width="{{ bar.baseline_width }}" height="3" rx="1.5"></rect>
+        {% endif %}
+        <rect class="bar {{ 'late' if bar.late else bar.status }}{{ ' unsourced' if bar.unsourced }}"
+              x="{{ bar.x }}" y="{{ bar.y + 3 }}"
+              width="{{ bar.width }}" height="{{ chart.bar_height }}" rx="3">
+          <title>{{ bar.item_title }} — {{ bar.label }}
+{{ bar.dates }}{% if bar.slip_label %} ({{ bar.slip_label }} against baseline){% endif %}
+{{ bar.source or 'no source recorded' }}</title>
+        </rect>
+        {% if bar.late %}
+          {# A bar that ends at the right-hand edge would have its slip figure
+             clipped by the viewBox, which is the one number on the row that
+             has to be readable. Flip it inside the bar instead. #}
+          <text class="slip" y="{{ bar.y + 13 }}"
+                x="{{ (bar.x - 34) if (bar.x + bar.width + 36) > chart.width else (bar.x + bar.width + 5) }}">{{ bar.slip_label }}</text>
+        {% endif %}
+      {% endfor %}
+
+      {% if chart.today_x %}
+        <line class="today" x1="{{ chart.today_x }}" y1="20"
+              x2="{{ chart.today_x }}" y2="{{ chart.height - 6 }}"></line>
+        <text class="todaylab" x="{{ chart.today_x + 3 }}"
+              y="{{ chart.height - 1 }}">today</text>
+      {% endif %}
+    </svg>
+    </div>
+
+  {% elif shown.kind == "bars" and not shown.is_empty %}
+    {% set chart = shown.bars %}
+    {% set plot = chart.width - chart.label_width - 12 %}
+    {% for line in chart.rows %}
+      <div class="moneyline">
+        <div class="nm">{{ line.label }}<small>{{ line.item_title }}</small></div>
+        <div class="track">
+          {% for part in line.parts %}
+            <div class="b k{{ loop.index }}{{ ' over' if part.over }}">
+              <div class="t"><i style="width: {{ (part.width / plot * 100)|round(2) }}%"></i></div>
+              <span>{{ part.label }} {{ part.display }}{% if part.over_display %}
+                <b>{{ part.over_display }}</b>{% endif %}</span>
+            </div>
+          {% endfor %}
+        </div>
+      </div>
+    {% endfor %}
+    <div class="moneytotals">
+      {% for total in chart.totals %}
+        <div><span>{{ total.label }}</span>{{ total.display }}</div>
+      {% endfor %}
+    </div>
+
+  {% elif shown.kind == "counter" and not shown.is_empty %}
+    <p class="big">{{ shown.number }}</p>
+    <p class="cap">{{ shown.caption }}</p>
+
+  {% elif shown.kind == "table" and not shown.is_empty %}
+    <table>
+      <tr>
+        {% for column in panel.columns %}<th>{{ column|replace('_', ' ') }}</th>{% endfor %}
+        <th>project</th>
+      </tr>
+      {% for row in shown.rows %}
+      <tr>
+        {% for column in panel.columns %}
+          <td class="{{ 'mono' if column not in ('label', 'title') }}">{{ row.get(column) or '—' }}</td>
+        {% endfor %}
+        <td class="mono">{{ row.item_title }}</td>
+      </tr>
+      {% endfor %}
+    </table>
+
+  {% else %}
+    {# The empty state is the panel's own sentence where it has one: the
+       engine does not know what kind of document fills this file. #}
+    <p class="empty">Nothing here yet.
+      {% if panel.empty_note %}{{ panel.empty_note }}
+      {% elif panel.reads == "rows" %}This panel reads
+      <code>{{ panel.source_file }}</code> inside a project folder — ask me to
+      fill it in from a document you have.{% endif %}</p>
+  {% endif %}
+
+  {% if shown.note %}<p class="note bad">{{ shown.note }}</p>{% endif %}
+  {% if shown.kind == "gantt" and shown.gantt and shown.gantt.problems %}
+    <p class="note bad">{{ shown.gantt.problems|join('; ') }}</p>
+  {% endif %}
+  {% if panel.description %}<p class="trace">{{ panel.description }}</p>{% endif %}
+</section>
+{% endfor %}

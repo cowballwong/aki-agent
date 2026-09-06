@@ -1,0 +1,24 @@
+{% extends "base.html" %}
+{% block heading %}Theme{% endblock %}
+{% block body %}
+{% include "_theme.html" %}
+{# The script has to live INSIDE the block.
+
+   Jinja renders nothing that sits outside a block in a template that
+   extends another, so a <script> placed after the block has been closed is dropped
+   without a word -- no error, no console message, just a button that does
+   nothing when pressed. Found by audit on 2026-08-23; three templates had
+   it. #}
+<script>
+/* Picking a theme clears the Day/Night override, so the ground you just
+   chose is the ground you get. Otherwise somebody sets Night, picks Paper,
+   and sees a dark page while the card says "light". */
+(function () {
+  document.querySelectorAll('.themecard').forEach(function (form) {
+    form.addEventListener('submit', function () {
+      try { localStorage.setItem('pa-mode', 'auto'); } catch (e) {}
+    });
+  });
+})();
+</script>
+{% endblock %}

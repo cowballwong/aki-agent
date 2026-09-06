@@ -1,0 +1,163 @@
+{# Three buttons. Nothing shown until one is pressed, and a red light when
+   something new has arrived.
+
+   reported 2026-08-23, in order:
+
+
+
+
+
+   The rename is not cosmetic. A list of what somebody else owes you and a
+   list of what you owe them are two different queues, and only one of them is
+   yours to act on — so `Waiting…` holds items of kind `waiting`, and the
+   things needing an answer moved to `Action now`, which is what that button
+   was always called. Held notifications used to fill the middle one; they are
+   a different sort of thing, with no id, no due date and nothing to expand,
+   and they have their own page.
+
+   The light: a count alone cannot say "new". Three has meant three all week;
+   three where one arrived this morning is a different day. `unseen_counts`
+   compares each item's created_at against when the queue was last opened, and
+   opening it puts the light out. #}
+
+<div class="pilltabs" id="queuebar">
+  {% for pane, label, kind, rows in (
+        ('waiting', 'Waiting…',   'waiting',  queue_waiting),
+        ('action',  'Action now', 'question', queue_action),
+        ('drafted', 'Drafted',    'draft',    queue_drafted)) %}
+    {% set fresh = queue_new.get(kind, 0) %}
+    <button type="button" class="pilltab{{ ' fresh' if fresh }}{{ ' waiting' if rows }}"
+            data-pane="{{ pane }}" data-kind="{{ kind }}"
+            title="{{ (fresh ~ ' new') if fresh else 'nothing new' }}">
+      {{ label }}<span class="n">{{ rows | length }}</span>
+      {% if fresh %}<span class="dot" aria-label="{{ fresh }} new"></span>{% endif %}
+    </button>
+  {% endfor %}
+</div>
+
+<div class="queuescrim" id="queue-scrim" hidden></div>
+
+<div class="queue" id="queue" hidden>
+  <div class="queuehead">
+    <span id="queue-title"></span>
+    <button type="button" class="queueclose" id="queue-close"
+            aria-label="Close">&times;</button>
+  </div>
+
+  <div class="queuebody">
+    {% for pane, rows, nothing in (
+          ('waiting', queue_waiting, 'Nobody owes you an answer.'),
+          ('action',  queue_action,  'Nothing needs you.'),
+          ('drafted', queue_drafted, 'Nothing written yet.')) %}
+      <div class="queuelist" data-pane="{{ pane }}" hidden>
+        {% for one in rows %}{% include "_queue_row.html" %}{% else %}
+          <p class="empty">{{ nothing }}</p>
+        {% endfor %}
+      </div>
+    {% endfor %}
+  </div>
+</div>
+
+<script>
+(function () {
+  var bar = document.getElementById('queuebar');
+  var queue = document.getElementById('queue');
+  var scrim = document.getElementById('queue-scrim');
+  var title = document.getElementById('queue-title');
+  var tabs = bar.querySelectorAll('.pilltab');
+  var lists = queue.querySelectorAll('.queuelist');
+  var token = document.querySelector('input[name=token]').value;
+
+  /* Two classes, and they come off in the right order. `queueup` drives the
+     movement; `queueopen` is what lifts the button row out of the page and
+     must stay until the row has finished travelling down, or it snaps back
+     into the layout mid-animation. */
+  function shut() {
+    document.body.classList.remove('queueup');
+    tabs.forEach(function (one) { one.classList.remove('on'); });
+    setTimeout(function () {
+      if (document.body.classList.contains('queueup')) { return; }
+      document.body.classList.remove('queueopen');
+      queue.hidden = true;
+      scrim.hidden = true;
+    }, 240);
+  }
+
+  function raise(tab) {
+    var wanted = tab.dataset.pane;
+    tabs.forEach(function (one) { one.classList.toggle('on', one === tab); });
+    lists.forEach(function (list) {
+      list.hidden = list.dataset.pane !== wanted;
+    });
+    title.textContent = tab.firstChild.textContent.trim();
+    queue.hidden = false;
+    scrim.hidden = false;
+    document.body.classList.add('queueopen');
+    /* Twice. The first frame is where the row becomes a fixed, off-screen
+       element; asking for the moved-in state in that same frame gives the
+       browser one style to compute and nothing to animate between. */
+    requestAnimationFrame(function () {
+      requestAnimationFrame(function () {
+        document.body.classList.add('queueup');
+      });
+    });
+
+    /* Opening it is what puts the light out, and it is recorded so the next
+       page load agrees. Fire and forget: a light left on because a POST
+       failed is a small thing, and blocking the panel on it is not. */
+    if (tab.classList.contains('fresh')) {
+      tab.classList.remove('fresh');
+      var mark = new FormData();
+      mark.append('token', token);
+      mark.append('kind', tab.dataset.kind);
+      fetch('/queues/seen', {method: 'POST', body: mark}).catch(function () {});
+    }
+  }
+
+  tabs.forEach(function (tab) {
+    tab.addEventListener('click', function () {
+      if (tab.classList.contains('on')) { shut(); } else { raise(tab); }
+    });
+  });
+
+  document.getElementById('queue-close').addEventListener('click', shut);
+  scrim.addEventListener('click', shut);       // anywhere outside it closes it
+  document.addEventListener('keydown', function (event) {
+    if (event.key === 'Escape'
+        && document.body.classList.contains('queueup')) { shut(); }
+  });
+
+  /* A row opens in place. No second overlay on top of the first. */
+  queue.querySelectorAll('.queuetop, .queueexpand').forEach(function (control) {
+    control.addEventListener('click', function () {
+      var row = control.closest('.queuerow');
+      var detail = row.querySelector('.queuedetail');
+      var opening = detail.hidden;
+      queue.querySelectorAll('.queuerow').forEach(function (other) {
+        other.querySelector('.queuedetail').hidden = true;
+        other.classList.remove('open');
+        var mark = other.querySelector('.queueexpand');
+        if (mark) { mark.textContent = '+'; }
+      });
+      detail.hidden = !opening;
+      row.classList.toggle('open', opening);
+      var mark = row.querySelector('.queueexpand');
+      if (mark) { mark.textContent = opening ? '−' : '+'; }
+    });
+  });
+
+  /* The id is here to be quoted somewhere else -- a message, a ticket, a
+     note -- so it is copied rather than read off the screen. */
+  queue.querySelectorAll('.queueid').forEach(function (chip) {
+    chip.addEventListener('click', function (event) {
+      event.stopPropagation();
+      var said = chip.textContent;
+      if (!navigator.clipboard) { return; }
+      navigator.clipboard.writeText(chip.dataset.copy).then(function () {
+        chip.textContent = 'copied';
+        setTimeout(function () { chip.textContent = said; }, 900);
+      }, function () {});
+    });
+  });
+})();
+</script>

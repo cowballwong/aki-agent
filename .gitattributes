@@ -1,0 +1,19 @@
+# Store every file exactly as it is on disk. No line-ending conversion.
+#
+# Git on Windows would otherwise check `bin/check.sh` and `bin/run-task.command`
+# out with CRLF endings, and a shell script with CRLF fails on macOS and Linux
+# with an error that names the wrong thing entirely ("bad interpreter: no such
+# file or directory"). This package ships those scripts, so the conversion
+# would break the half of the platforms that cannot be tested here.
+#
+# The Windows launchers (.bat, .vbs) are already CRLF on disk and stay that
+# way for the same reason: what is on disk works.
+* -text
+
+# Binary, so git never tries to diff or convert them.
+*.png binary
+*.jpg binary
+*.zip binary
+*.pdf binary
+*.xlsx binary
+*.onnx binary

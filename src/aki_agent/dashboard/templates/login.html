@@ -1,0 +1,70 @@
+{% extends "base.html" %}
+{% block titlemode %}page{% endblock %}
+{% block heading %}Your PIN{% endblock %}
+{% block body %}
+
+{# `locked` hides the rail, the chat and the top bar, and centres what is
+   left. Until 2026-08-24 this comment claimed base.html already did that "by
+   its own rules for a page with no session". There were no such rules: the
+   login page was drawing the whole dashboard behind the card, buttons and
+   queue counts included. A comment that describes what ought to happen reads
+   exactly like one describing what does. #}
+
+<div class="card" style="max-width:26rem">
+
+  <p class="doorname">{{ assistant_name }} — Your PIN</p>
+
+  {% if sent_to_phone %}
+    <p><b>Done. Your new PIN has been sent to you.</b></p>
+    <p>Check your messages. The old PIN no longer works, and nothing was
+       written to this computer.</p>
+    <hr>
+  {% endif %}
+
+  {% if reset_file %}
+    <p><b>Done. Your new PIN is in a file on your Desktop:</b></p>
+    {% if why_a_file %}
+      <p class="sub">It went to a file rather than to your phone because
+         {{ why_a_file }}.</p>
+    {% endif %}
+    <p><code>{{ reset_file }}</code></p>
+    <p>Open it, use the PIN, then <b>delete the file</b>. Anyone who can see
+       your Desktop can read it, and it is the only place that PIN is written
+       down.</p>
+    <hr>
+  {% endif %}
+
+  {% if problem %}
+    <p class="warn">{{ problem }}</p>
+  {% endif %}
+
+  <form method="post" action="{{ url_for('login') }}">
+    {# The same check every other form here carries. A login endpoint is
+       exactly the one you do not exempt: without it a page somebody is merely
+       visiting can post a PIN it has guessed. #}
+    <input type="hidden" name="token" value="{{ token }}">
+    <input type="hidden" name="next" value="{{ wanted }}">
+    <label>PIN
+      <input name="pin" type="password" inputmode="numeric"
+             autocomplete="current-password" autofocus
+             pattern="[0-9]*" maxlength="8">
+    </label>
+    <button type="submit" class="primary">Open</button>
+  </form>
+
+  <p class="freshness">
+    This keeps other people who use this computer out of your assistant. It
+    does not encrypt anything — your notes and settings are ordinary files, and
+    somebody with the machine can still open them directly.
+  </p>
+
+  <form method="post" action="{{ url_for('forgot_pin') }}">
+    <input type="hidden" name="token" value="{{ token }}">
+    <button type="submit" class="btn small">I have forgotten it</button>
+    <span class="sub">Sets a new one and sends it to you. If nothing is
+    connected to send to, it writes it to your Desktop instead. Either way the
+    old one stops working.</span>
+  </form>
+
+</div>
+{% endblock %}

@@ -1,0 +1,46 @@
+# Aki Agent — what never belongs in history.
+
+# The build environment. Absolute paths are baked inside it, so a copy on
+# another machine is worse than useless.
+venv/
+.venv/
+
+# Compiled bytecode from whichever machine happened to run the tests.
+__pycache__/
+*.pyc
+*.pyo
+.pytest_cache/
+
+# Built zips. A repository that contains every previous release doubles in
+# size each build — the same reason `bin/make_release.py` excludes it.
+_release/
+
+# Google Drive writes these all over a synced folder. Invisible on Windows,
+# noise everywhere else.
+desktop.ini
+
+# A user's own configuration and secrets live in their home folder and must
+# never travel inside the package. Stated here as well as in make_release.py
+# so a stray copy cannot escape either route.
+config.yaml
+secrets.json
+.env
+
+# Editing leftovers. `_remote_block.tmp` -- a chunk of template HTML saved
+# aside during an edit -- was committed in 0.41.7 and sat in the tree until
+# 2026-09-06, when it turned up in the file list for the public repository.
+# Harmless, and exactly the sort of thing nobody looks at twice in their own
+# repository and everybody sees in somebody else's.
+*.tmp
+*.bak
+*.orig
+
+# Editor and OS litter
+.vscode/
+.idea/
+*.swp
+.DS_Store
+Thumbs.db
+
+# Audit reports -- working notes, not part of the package
+_audit/

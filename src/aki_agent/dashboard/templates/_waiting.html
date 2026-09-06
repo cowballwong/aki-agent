@@ -1,0 +1,35 @@
+<p class="freshness">{{ summary }}</p>
+
+{% if items %}
+  {% for item in items %}
+    <div class="card">
+      <h2>{{ item.title }}</h2>
+      {% if item.body %}<pre>{{ item.body }}</pre>{% endif %}
+
+      <div class="row">
+        {% for option in item.options %}
+          <form method="post" action="/waiting/{{ item.id }}/{{ option.key }}">
+            <input type="hidden" name="token" value="{{ token }}">
+            <button type="submit">{{ option.label }}</button>
+          </form>
+        {% endfor %}
+
+        <form method="post" action="/waiting/{{ item.id }}/dismiss">
+          <input type="hidden" name="token" value="{{ token }}">
+          <button type="submit" class="quiet">Not now</button>
+        </form>
+      </div>
+
+      <form method="post" action="/waiting/{{ item.id }}/reply" class="row">
+        <input type="hidden" name="token" value="{{ token }}">
+        <input type="text" name="text" maxlength="2000"
+               placeholder="Or say it in your own words&hellip;">
+        <button type="submit">Send</button>
+      </form>
+    </div>
+  {% endfor %}
+{% else %}
+  <p class="empty">Nothing is waiting for you. When I need a decision &mdash;
+  a draft to approve, a question I cannot settle myself &mdash; it appears
+  here and on your phone.</p>
+{% endif %}

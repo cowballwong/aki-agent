@@ -1,0 +1,69 @@
+# Example configuration B — a peripatetic music teacher.
+#
+# Chosen precisely because it has NOTHING in common with the architecture
+# example: different unit of work, different fields, different field types,
+# different summary files, different language.
+#
+# If the engine can render both of these without a code change, the schema is
+# genuinely declarative. If it cannot, the package would ship as a
+# single-profession tool wearing a new skin.
+
+schema_version: 1
+
+assistant:
+  name: "Bo"
+  tone: "Encouraging and brief. Remind me about admin I avoid."
+  colour: "#f4a261"
+  logo: "♪"
+
+user:
+  name: "Wing Lau"
+  identity_aliases:
+    - "Wing Lau"
+    - "Wing"
+    - "WL"
+  timezone: "Europe/London"
+  languages: ["en", "zh-Hant"]
+  occupation: "Peripatetic piano and violin teacher"
+
+layout:
+  # Relative paths are resolved against THIS file's folder.
+  root: "../../tests/fixtures/workspace_music"
+
+  # A different word for the unit of work. The engine has no opinion.
+  item_label: "Student"
+  item_label_plural: "Students"
+
+  # A different set of summary files, too -- this is configuration, not a
+  # fixed convention baked into the loader.
+  summary_files: [state, actions, history]
+
+  fields:
+    - key: grade
+      label: "Working towards"
+      type: enum
+      values: ["initial", "grade 1", "grade 2", "grade 3", "grade 4", "grade 5", "grade 6", "grade 7", "grade 8", "diploma"]
+      help: "The exam grade currently being prepared."
+
+    - key: instrument
+      label: "Instrument"
+      type: enum
+      values: [piano, violin]
+
+    - key: next_lesson
+      label: "Next lesson"
+      type: date
+
+    - key: fees_settled
+      label: "Fees settled"
+      type: bool
+
+    - key: pieces
+      label: "Current pieces"
+      type: tags
+
+notifications:
+  enabled: true
+  channels:
+    telegram: true
+  urgent_keywords: ["cancelled", "exam tomorrow"]

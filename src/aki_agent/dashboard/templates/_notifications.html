@@ -1,0 +1,126 @@
+<p class="freshness">Read at {{ read_at.strftime('%H:%M:%S') }}.</p>
+
+{% if settings %}
+<div class="card">
+  <p>Notifications are <b>{{ 'on' if settings.enabled else 'off' }}</b>.
+  {% if settings.quiet_hours %} Quiet from {{ settings.quiet_hours[0] }} to {{ settings.quiet_hours[1] }}.{% else %} No quiet hours.{% endif %}</p>
+
+  {# Edited here rather than on Settings (reported 2026-08-20). A value shown on
+     one page and changed on another is a value people believe is fixed --
+     he read "Quiet from 22:00", had no way to change it, and reported the
+     page as useless. He was right: showing a setting without offering it is
+     worse than not showing it. #}
+  <form method="post" action="/notifications/quiet">
+    <input type="hidden" name="token" value="{{ token }}">
+    {# The same field names the Settings page uses, so both write through one
+       validator. Two forms with two spellings is two validators that will
+       eventually disagree about what "22:00" means. #}
+    <input type="hidden" name="notifications_present" value="1">
+    <label class="chip"><input type="checkbox" name="notifications_enabled"
+      {{ 'checked' if settings.enabled }}> Let it reach me at all</label>
+    <div class="row">
+      <label>Quiet from
+        <input name="quiet_from" value="{{ settings.quiet_hours[0] if settings.quiet_hours else '' }}"
+               placeholder="22:00" autocomplete="off"></label>
+      <label>Quiet until
+        <input name="quiet_to" value="{{ settings.quiet_hours[1] if settings.quiet_hours else '' }}"
+               placeholder="07:00" autocomplete="off"></label>
+      <label>Words urgent enough to wake me
+        <input name="urgent_keywords" value="{{ settings.urgent_keywords|join(', ') }}"
+               autocomplete="off"></label>
+    </div>
+    <button type="submit">Save</button>
+    <p class="freshness">
+      Leave the two times empty for no quiet hours at all. Nothing is ever
+      dropped while you are quiet &mdash; it is held and delivered afterwards
+      as one summary, and being quiet stops the message, never the work.
+    </p>
+  </form>
+  <p class="freshness">
+    A channel nobody has an opinion about is <b>on</b>, on purpose: a sender that is
+    silently off goes missing for weeks, while one that is too noisy gets switched
+    off in one click.
+  </p>
+  {#
+    The one click the sentence above has always promised (built 2026-08-23).
+
+    `notifications.channels` was genuinely read -- `notify.send` and
+    `channels.py` both consult it -- but nothing wrote it. No route touched
+    it and `settings.apply_form` handles `enabled`, `quiet_hours` and
+    `urgent_keywords` only. So the chips were a read-only display beside a
+    paragraph saying a noisy channel "gets switched off in one click", and
+    the only way to switch one off was editing the YAML by hand, which is the
+    thing `settings.py` says this package exists to avoid.
+  #}
+  {# Iterates the channels that EXIST rather than the ones already recorded
+     in the config. `channels` starts as an empty dict whose only writer is
+     this very chip, so `{% if settings.channels %}` meant a fresh install
+     rendered nothing and the "one click" above was unreachable. 2026-09-05. #}
+  {% if channel_names %}
+    <div class="strip">
+    {% for name in channel_names %}
+      {% set on = settings.channel_enabled(name) %}
+      <form method="post" action="/notifications/channel" class="inline">
+        <input type="hidden" name="token" value="{{ token }}">
+        <input type="hidden" name="name" value="{{ name }}">
+        <input type="hidden" name="state" value="{{ 'off' if on else 'on' }}">
+        <button type="submit" class="chip"
+                title="{{ 'Stop sending here' if on else 'Send here again' }}">
+          {{ name }} &mdash;
+          <b class="{{ 'ok' if on else 'bad' }}">{{ 'on' if on else 'off' }}</b>
+        </button>
+      </form>
+    {% endfor %}
+    </div>
+  {% endif %}
+</div>
+{% endif %}
+
+
+{% if held %}
+  <div class="note">
+    {# Corrected 2026-09-05. `notify.release` has exactly two callers: the
+       `release-held` task, whose only trigger is 08:05, and the button
+       below. A quiet window ending at 15:00 therefore holds until the next
+       morning, which is not what "when it is no longer quiet" promises. #}
+    These were not dropped. They are queued and go out together as one summary
+    at 8:05 the next morning &mdash; or now, if you press the button.
+  </div>
+  <table>
+    <thead><tr><th>When</th><th>Message</th><th>Why it is waiting</th></tr></thead>
+    <tbody>
+    {% for entry in held %}
+      <tr>
+        <td>{{ entry.created_at[11:16] }}</td>
+        <td>{% if entry.urgent %}<span class="pill warn">urgent</span> {% endif %}{{ entry.text }}</td>
+        <td class="blank">{{ entry.reason }}</td>
+      </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+
+  {#
+    Two ways out of a backlog, added 2026-08-23. Before this the queue had
+    neither: `notify.release()` had no caller and the 08:05 task that was
+    meant to call it held a plain-English sentence instead, so the count on
+    every page could only go up.
+
+    Deliberately two buttons and not one. `clear_held` exists so somebody can
+    bin a backlog on purpose, and it is a separate named action rather than
+    an option on "deliver" precisely so that discarding can never happen as a
+    side effect of trying to send.
+  #}
+  <div class="quickrow">
+    <form method="post" action="/notifications/release">
+      <input type="hidden" name="token" value="{{ token }}">
+      <button type="submit" class="quick">Send them now</button>
+    </form>
+    <form method="post" action="/notifications/clear"
+          onsubmit="return confirm('Discard {{ held|length }} held message(s)?\n\nThey are not delivered anywhere. This cannot be undone.');">
+      <input type="hidden" name="token" value="{{ token }}">
+      <button type="submit" class="quick">Discard them</button>
+    </form>
+  </div>
+{% else %}
+  <p class="empty">Nothing waiting.</p>
+{% endif %}

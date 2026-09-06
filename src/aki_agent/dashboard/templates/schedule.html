@@ -1,0 +1,444 @@
+{% extends "base.html" %}
+{% block heading %}Scheduled work{% endblock %}
+{% from "_subtabs.html" import subtabs %}
+{% block body %}
+{% if note %}<div class="note">{{ note }}</div>{% endif %}
+
+{# THREE TABS, AND EACH ONE IS A WAY OF BEING STARTED.
+   Settled on 2026-09-05: the trigger kinds are loops, heartbeat and event.
+
+   They used to mean something else -- "talks to you" against "keeps the
+   machine honest" -- which is a real distinction that was being drawn in the
+   wrong place, because the trigger sitting next to it answered a different
+   question. A task could be filed under Heartbeat and run at 08:05.
+
+   Now the tab IS the trigger, and "does it reach you" is a tick box on the
+   form. See `KINDS_OF_WORK` in `schedule.py`. #}
+{{ subtabs("/schedule", tab, [
+     ("loop", "Loops"), ("heartbeat", "Heartbeat"), ("event", "Event")]) }}
+
+<p class="freshness">
+  {{ kind_note }}
+  On {{ platform }}, everything runs as you while you are logged in &mdash;
+  never as an administrator.
+</p>
+
+{% set mine = tasks | selectattr('work', 'equalto', tab) | list %}
+
+{% if not mine %}
+  <p class="empty">Nothing on this one yet.</p>
+{% else %}
+<table>
+  <thead><tr><th>Task</th><th>When</th><th>Why</th><th>Runs automatically</th>
+             <th></th></tr></thead>
+  <tbody>
+  {% for task in mine %}
+    <tr>
+      <td>{{ task.title }}
+        {% if task.built_in %}<span class="pill">built in</span>{% endif %}
+        {# The other half of the tab's old meaning, kept visible.
+           Splitting timing from voice would otherwise hide the voice
+           completely until somebody opened the form. #}
+        {% if not announces.get(task.key) %}
+          <span class="pill" title="It runs and writes to the log, but does
+            not message you">silent</span>
+        {% endif %}
+      </td>
+      <td>{{ task.when() }}</td>
+      <td class="blank">{{ task.why }}</td>
+      {# One state and one action, in one place.
+         There used to be an "Installed: yes/no" column here and, three
+         columns later, an Install button and a Remove button both showing
+         at all times -- so an already-scheduled task offered to install
+         itself again, and the column and the buttons had to be read
+         together to work out what pressing anything would do.
+         Reported on 2026-08-21: something already installed should not
+         still offer an Install button, and the Installed column read as
+         unclear. #}
+      <td>
+        <form method="post" action="/schedule/{{ 'remove' if is_installed.get(task.key) else 'install' }}"
+              class="inline"
+              {% if is_installed.get(task.key) %}
+              onsubmit="return confirm('Stop {{ task.title | js }} running automatically?\n\nThe task stays here and can be switched back on.');"
+              {% endif %}>
+          <input type="hidden" name="token" value="{{ token }}">
+          <input type="hidden" name="key" value="{{ task.key }}">
+          <button type="submit" class="state {{ 'on' if is_installed.get(task.key) }}"
+                  title="{{ 'Stop it running on its own' if is_installed.get(task.key) else 'Let it run on its own' }}">
+            {% if is_installed.get(task.key) %}on{% else %}off{% endif %}
+          </button>
+        </form>
+      </td>
+      <td class="rowacts">
+        {# A shipped task cannot be edited -- it is part of the package and
+           the next upgrade would overwrite it. What you can do is take a
+           copy: same settings, your own task, yours to change. Asked for on
+           2026-08-21: a built-in task should carry a [Custom] button that
+           duplicates its settings into the edit panel below; and on
+           2026-09-05, that Custom should open the same form, filled in, to
+           be changed and saved as a new task
+           -- same idea, now in the dialog rather than a panel down the page. #}
+        {% if task.built_in %}
+          <a class="btn" href="/schedule?tab={{ tab }}&custom={{ task.key }}"
+             title="Make your own copy of this one">Custom</a>
+        {% else %}
+          <a class="btn" href="/schedule?tab={{ tab }}&edit={{ task.key }}">Edit</a>
+        <form method="post" action="/schedule/delete" class="inline"
+              onsubmit="return confirm('Delete this task?')">
+          <input type="hidden" name="token" value="{{ token }}">
+          <input type="hidden" name="key" value="{{ task.key }}">
+          <button type="submit">Delete</button>
+        </form>
+        {% endif %}
+      </td>
+    </tr>
+  {% endfor %}
+  </tbody>
+</table>
+{% endif %}
+
+{# ONE BUTTON, NOT A FORM DOWN THE PAGE.
+   Reported on 2026-09-05: every tab held a table with an Add-new-task form
+   under it, which made the page very long. Add New Task became one button
+   that opens the form in a dialog.
+
+   A LINK, on purpose, rather than a button that needs script to open the
+   dialog. The server renders the dialog already `open` when the address says
+   so, which means Add, Edit and Custom all work with no JavaScript at all --
+   the property the old inline panel had, and the one a dialog usually
+   quietly costs you. The script below only upgrades an already-open dialog
+   to a modal one. #}
+<p class="rowtools">
+  <a class="btn primary" href="/schedule?tab={{ tab }}&amp;add=1">
+    + Add a task</a>
+</p>
+
+<dialog id="taskform" class="sheet" {{ 'open' if showing_form }}>
+  <div class="sheethead">
+    <b>
+      {% if copying %}Your copy of &ldquo;{{ editing.title }}&rdquo;
+      {% elif editing %}Edit &ldquo;{{ editing.title }}&rdquo;
+      {% else %}Add a task &mdash; {{ kinds[tab][0] }}{% endif %}
+    </b>
+    <a class="btn" href="/schedule?tab={{ tab }}" id="closeform">Close</a>
+  </div>
+
+  {% if copying %}
+    <p class="freshness">
+      Same settings, but this one is yours &mdash; change anything you like,
+      then save it under its own name.
+      <b>{{ editing.title }}</b> itself is left alone, and keeps running if it
+      is switched on.
+    </p>
+  {% elif editing %}
+    <p class="freshness">Saving replaces this task.</p>
+  {% endif %}
+
+  <form method="post" action="/schedule/save">
+    <input type="hidden" name="token" value="{{ token }}">
+    {# Empty when copying: that is the whole difference between a copy and an
+       edit. See the `editing_key` note in `app.py`. #}
+    <input type="hidden" name="key" value="{{ editing_key }}">
+
+    <label>Name<input name="title" placeholder="Check the shared folder"
+      value="{{ editing.title if editing else '' }}"></label>
+    <label>Why you want it<input name="why" placeholder="so I notice new drawings the same day"
+      value="{{ editing.why if editing else '' }}"></label>
+
+    {# The "What kind of work" dropdown stood here. Reported redundant on
+       2026-09-05, when adding a task under Loops
+       -- and it was, twice over: you had already said which kind
+       by being on this tab, and the answer is now read off the trigger
+       anyway, so the field could not have been believed even if it were
+       kept. See `ScheduledTask.work`. #}
+
+    <label>What it should do<textarea name="prompt" rows="4"
+      placeholder="Look in the shared folder for anything added since yesterday and tell me what is new.">{{ editing.prompt if editing else '' }}</textarea></label>
+
+    {# WHEN -- one trigger, decided by the tab.
+       The "+ Add trigger" row and its kind dropdown stood here, taken away
+       for both Loops and Heartbeat as asked. With one family
+       per tab there was nothing left for it to offer on two of the three,
+       and on the third the choice is between three shapes of the same
+       question, which is a field rather than a list builder. #}
+    <h3 class="when">When</h3>
+
+    {% set had = editing_triggers[0] if editing_triggers else {} %}
+
+    {% if tab == 'loop' %}
+      <input type="hidden" name="t0_kind" value="time">
+      <label>Time
+        <input type="time" name="t0_hour"
+               value="{{ '%02d:%02d' % (had.get('hour', 9), had.get('minute', 0)) }}">
+      </label>
+      <div class="strip">
+        {% for day in weekdays %}
+          <label class="chip"><input type="checkbox" name="t0_day_{{ day }}"
+            {{ 'checked' if day in had.get('weekdays', []) }}> {{ day }}</label>
+        {% endfor %}
+      </div>
+      <p class="freshness">Leave every day unticked to run it every day.</p>
+
+    {% elif tab == 'heartbeat' %}
+      {# Asked for: Heartbeat drops "At a set time" for "Every so often".
+         Not a rename -- a set time is no longer reachable from here at all,
+         because a task on a clock is a Loop and now says so. #}
+      <input type="hidden" name="t0_kind" value="interval">
+      <label>How often, in minutes
+        <input type="number" name="t0_every" min="5" max="1440"
+               value="{{ had.get('every_minutes', 60) }}">
+      </label>
+
+    {% else %}
+      {% set kind = had.get('kind', 'happening') %}
+      {# The SHORT name in the dropdown, and the caveat underneath the choice
+         it applies to. `trigger_caveats` exists so the two are separate --
+         its own docstring says a card titled with the whole sentence stops
+         having a title, and an option is a title. Rendered with the caveats
+         folded in, the three options ran to eleven, nineteen and four words. #}
+      <label>What starts it
+        <select name="t0_kind" id="eventkind">
+          {% for one in tab_triggers %}
+            <option value="{{ one }}" {{ 'selected' if kind == one }}>
+              {{ trigger_names[one] }}</option>
+          {% endfor %}
+        </select>
+      </label>
+
+      <div class="eventfields" data-for="happening">
+        {# Asked for: an Event is whatever the user writes. A kind and
+           some words -- no
+           syntax, and the words are optional because "any problem at all" is
+           a reasonable thing to want. #}
+        <label>Wait for
+          <select name="t0_event">
+            {% for key, says in event_kinds.items() %}
+              <option value="{{ key }}"
+                      {{ 'selected' if had.get('event_kind', 'any') == key }}>
+                {{ says }}</option>
+            {% endfor %}
+          </select>
+        </label>
+        <label>Only if it mentions <span class="sub">(optional)</span>
+          <input name="t0_match" value="{{ had.get('match', '') }}"
+                 placeholder="drawing, invoice, failed...">
+        </label>
+      </div>
+
+      <div class="eventfields" data-for="watch">
+        <label>Folder</label>
+        <div class="row tight">
+          <input type="text" name="t0_path" id="watchpath"
+                 value="{{ had.get('watch_path', '') }}"
+                 placeholder="C:\Users\you\Shared">
+          <button type="button" id="browse">Browse&hellip;</button>
+        </div>
+      </div>
+
+      <div class="eventfields" data-for="login">
+        <p class="freshness">Nothing to set &mdash; it runs when you log in.</p>
+      </div>
+
+      <label class="checkfields eventfields" data-for="happening watch">How
+        often to check, in minutes
+        <input type="number" name="t0_every" min="1" max="1440"
+               value="{{ had.get('every_minutes', 5) }}">
+      </label>
+
+      {# ONE CAVEAT PER KIND, not one for the pair.
+         The first version printed the `happening` sentence under both, so
+         choosing "When a folder changes" was answered with an explanation
+         about logs. They are different limits -- macOS can watch a folder
+         natively and can watch a log nowhere -- so they are different
+         sentences, and only one is on screen at a time. #}
+      {% for one in ('happening', 'watch') %}
+        {% if trigger_caveats.get(one) %}
+          <p class="freshness eventfields" data-for="{{ one }}">
+            {{ trigger_caveats[one] }}
+          </p>
+        {% endif %}
+      {% endfor %}
+    {% endif %}
+
+    {# DOES IT REACH YOU -- the other half of what the tabs used to mean.
+       Asked for on 2026-09-05: adding a task should carry a "does it reach
+       you" check, so Notification can tell the two apart and set a mode.
+
+       Nothing was added to the model for this: `announce` has been on
+       `ScheduledTask` since 2026-08-20 and Notifications has always read it
+       -- a task with it off shows there as "never". It was simply never
+       reachable from the form, so every task anybody made arrived set to
+       message them. #}
+    <label class="tickline">
+      <input type="checkbox" name="announce"
+             {{ 'checked' if editing_announce }}>
+      Let it reach me when it has something to say
+    </label>
+    <p class="freshness">
+      Unticked, it still runs and still writes to the day&rsquo;s log &mdash;
+      it just does not message you. <b>When</b> it is allowed to reach you,
+      once this is ticked, is set on <a href="/notifications">Notifications</a>.
+    </p>
+
+    <button type="submit" class="primary">
+      {% if editing and not copying %}Save changes
+      {% elif copying %}Save as my own
+      {% else %}Add task{% endif %}
+    </button>
+  </form>
+</dialog>
+
+<p class="freshness">
+  <b>Switching one off does not delete it.</b> It stays on this page with
+  everything it knows, and switching it back on puts it straight back into
+  the schedule.
+</p>
+
+<p class="freshness">
+  Housekeeping starts silent, because a checkpoint doing its job correctly is
+  one you should never hear from. The ones that exist to tell you something
+  &mdash; the summaries, the wrap-up, anything held while you were busy
+  &mdash; start switched on. All of that is on
+  <a href="/notifications">Notifications</a>.
+</p>
+
+
+<dialog id="picker">
+  <form method="dialog" class="pickerhead">
+    <b>Pick a folder</b>
+    <button value="cancel">Close</button>
+  </form>
+  <p class="freshness" id="pickerwhere">This computer</p>
+  <p class="note" id="pickertrouble" hidden></p>
+  <div class="pickerlist" id="pickerlist"></div>
+  <div class="row tight">
+    <button type="button" id="pickerup">Up</button>
+    <button type="button" id="pickeruse">Use this folder</button>
+  </div>
+</dialog>
+
+<script>
+/* Three small jobs, and none of them is building the form.
+ *
+ * The trigger fields used to be assembled here from a `KINDS` map, because
+ * a task could carry several triggers of any kind and the page had to be
+ * able to grow a card for one the server had never sent. One family per tab
+ * ended that: what the fields are is known when the page is rendered, so
+ * they are rendered, and this file no longer holds a second description of
+ * what a trigger looks like.
+ */
+(function () {
+  var TOKEN = {{ token | tojson }};
+
+  /* Making the sheet modal moved to `base.html` on 2026-09-05, when the
+     Tools page grew sheets of its own. Two copies of "upgrade an open
+     dialog" is two copies that drift, and the second one had already been
+     written before this was noticed. */
+
+  /* 1. On the Event tab, show only the fields the chosen kind uses. */
+  var chooser = document.getElementById('eventkind');
+  function showFields() {
+    var want = chooser ? chooser.value : '';
+    var groups = document.querySelectorAll('.eventfields');
+    for (var i = 0; i < groups.length; i++) {
+      var wants = (groups[i].getAttribute('data-for') || '').split(' ');
+      groups[i].hidden = wants.indexOf(want) === -1;
+    }
+  }
+  if (chooser) {
+    chooser.addEventListener('change', showFields);
+    showFields();
+  }
+
+  /* 2. The folder picker, for the one path field there now is. */
+  var picker = document.getElementById('picker');
+  var pickerList = document.getElementById('pickerlist');
+  var pickerWhere = document.getElementById('pickerwhere');
+  var pickerTrouble = document.getElementById('pickertrouble');
+  var box = document.getElementById('watchpath');
+  var browse = document.getElementById('browse');
+  var here = '';
+  var above = null;
+
+  function openList(at) {
+    if (!picker || !picker.showModal) { return; }
+    picker.showModal();
+    draw(at);
+  }
+
+  function draw(at) {
+    var body = new FormData();
+    body.append('token', TOKEN);
+    body.append('at', at || '');
+    fetch('/schedule/folders', {method: 'POST', body: body})
+      .then(function (r) { return r.json(); })
+      .then(function (data) {
+        here = data.here;
+        above = data.up;
+        pickerWhere.textContent = data.label;
+        pickerTrouble.textContent = data.trouble || '';
+        pickerTrouble.hidden = !data.trouble;
+        document.getElementById('pickerup').disabled = data.up === null;
+        document.getElementById('pickeruse').disabled = !here;
+        pickerList.textContent = '';
+        if (!data.folders.length && !data.trouble) {
+          var none = document.createElement('p');
+          none.className = 'sub';
+          none.textContent = 'No folders in here.';
+          pickerList.appendChild(none);
+        }
+        data.folders.forEach(function (folder) {
+          var row = document.createElement('button');
+          row.type = 'button';
+          row.className = 'pickerrow';
+          row.textContent = folder.name;
+          row.addEventListener('click', function () { draw(folder.path); });
+          pickerList.appendChild(row);
+        });
+        pickerList.scrollTop = 0;
+      })
+      .catch(function () {
+        pickerTrouble.hidden = false;
+        pickerTrouble.textContent =
+          'The dashboard did not answer. Type the path instead.';
+      });
+  }
+
+  if (browse && box) {
+    browse.addEventListener('click', function () {
+      var waiting = browse.textContent;
+      browse.disabled = true;
+      browse.textContent = 'Pick it in the window\u2026';
+
+      var body = new FormData();
+      body.append('token', TOKEN);
+      body.append('at', box.value.trim());
+      fetch('/schedule/folders/native', {method: 'POST', body: body})
+        .then(function (r) { return r.json(); })
+        .then(function (data) {
+          browse.disabled = false;
+          browse.textContent = waiting;
+          if (data.trouble) { openList(box.value.trim()); return; }
+          if (data.path) { box.value = data.path; }
+        })
+        .catch(function () {
+          browse.disabled = false;
+          browse.textContent = waiting;
+          openList(box.value.trim());
+        });
+    });
+  }
+
+  if (picker) {
+    document.getElementById('pickerup').addEventListener('click', function () {
+      if (above !== null) { draw(above); }
+    });
+    document.getElementById('pickeruse').addEventListener('click', function () {
+      if (box) { box.value = here; }
+      picker.close();
+    });
+  }
+})();
+</script>
+
+{% endblock %}

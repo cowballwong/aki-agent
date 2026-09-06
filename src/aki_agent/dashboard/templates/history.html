@@ -1,0 +1,421 @@
+{% extends "base.html" %}
+{% from "_subtabs.html" import subtabs %}
+{% block heading %}Memory{% endblock %}
+{% block body %}
+
+{# — so two, the same strip Running uses.
+
+   Three on 2026-09-05, when the page became Memory. Two of his five are not
+   here yet, and are not drawn as empty tabs — a tab whose settings save and
+   whose work never runs is the "saved, visible, and inert" failure written
+   up three times in this package's own notes.
+
+   The first two have the same shape on purpose: pick a moment on the left,
+   read it on the right. Moving between them should feel like changing what
+   you are looking at, not like changing page. #}
+{{ subtabs("/memory", tab, [("eod", "EOD"), ("handoff", "Handover"),
+                            ("dreaming", "Dreaming"),
+                            ("optimise", "Self-Optimize"),
+                            ("vectors", "Vector store")]) }}
+
+{% if note %}<div class="note">{{ note }}</div>{% endif %}
+
+
+{% if tab == "eod" %}
+  <p class="freshness">
+    The day&rsquo;s own account, as the End of day wrap-up wrote it. Pick a
+    date &mdash; a dot marks a day that has one.
+  </p>
+
+  <div class="calrow">
+    <div class="month">
+      {# The same grid as Today, from the same helpers. A second calendar
+         written for this page would drift from that one within a month. #}
+      <div class="monthhead">
+        {% if previous_month %}
+          <a class="step" href="?tab=eod&amp;m={{ previous_month }}" title="Previous month">&lsaquo;</a>
+        {% else %}<span class="step done">&lsaquo;</span>{% endif %}
+        <span class="mname">{{ month_name }}</span>
+        {% if next_month %}
+          <a class="step" href="?tab=eod&amp;m={{ next_month }}" title="Next month">&rsaquo;</a>
+        {% else %}<span class="step done">&rsaquo;</span>{% endif %}
+      </div>
+      <table class="cal">
+        <thead><tr>
+          {% for day in ["M","T","W","T","F","S","S"] %}<th>{{ day }}</th>{% endfor %}
+        </tr></thead>
+        <tbody>
+          {% for week in weeks %}
+            <tr>
+              {% for day in week %}
+                {% if day %}
+                  <td class="{{ 'now' if day == today_date }} {{ 'picked' if day == picked_day }}">
+                    <a href="?tab=eod&amp;m={{ month_key }}&amp;d={{ day.isoformat() }}">
+                      {{ day.day }}
+                      {% if day in written_days %}<span class="pip"></span>{% endif %}
+                    </a>
+                  </td>
+                {% else %}
+                  <td class="blank"></td>
+                {% endif %}
+              {% endfor %}
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+      {% if month_key != today_date.strftime('%Y-%m') %}
+        <a class="backtoday" href="?tab=eod">Back to today</a>
+      {% endif %}
+    </div>
+
+    <div class="daydetail">
+      <div class="agendahead">{{ picked_day.strftime('%A %d %B %Y') }}</div>
+      {% if day_entries %}
+        {# What was WRITTEN that day -- the wrap-up. This is the thing the
+           tab is for, so it is the thing at the top. #}
+        {% for entry in day_entries %}
+          <div class="entry">
+            <div class="entryhead">{{ entry.title }}{% if entry.at %}
+              <span class="when">{{ entry.at }}</span>{% endif %}</div>
+            <pre class="plain">{{ entry.body }}</pre>
+          </div>
+        {% endfor %}
+        {% if day_events %}
+          {# And what merely happened. Folded, because on a day with ten
+             recycles this is a hundred lines of timings and it used to sit
+             ON TOP of the paragraph above. #}
+          <details class="alsothatday">
+            <summary>Everything else that day <span class="n">{{ day_events | length }}</span></summary>
+            <ul>{% for line in day_events %}<li>{{ line }}</li>{% endfor %}</ul>
+          </details>
+        {% endif %}
+      {% elif day_events %}
+        {# The machine was busy and nothing was written. Say which, rather
+           than showing an empty panel next to a day that clearly had one. #}
+        <p class="empty">
+          No wrap-up was written that day
+          {%- if picked_day == today_date %} yet. Press <b>End of day</b> to
+          write one now{% endif %}.
+        </p>
+        <details class="alsothatday" open>
+          <summary>What happened that day <span class="n">{{ day_events | length }}</span></summary>
+          <ul>{% for line in day_events %}<li>{{ line }}</li>{% endfor %}</ul>
+        </details>
+      {% else %}
+        {# Worded three ways, because "nothing was written" is a failure for
+           yesterday, a normal state for this morning, and meaningless for a
+           day that has not happened. #}
+        <p class="empty">
+          {% if picked_day > today_date %}
+            Nothing yet &mdash; that day has not happened.
+          {% elif picked_day == today_date %}
+            Nothing written yet today. The wrap-up runs at 18:30, or press
+            <b>End of day</b> to write it now.
+          {% else %}
+            Nothing was written that day.
+          {% endif %}
+        </p>
+      {% endif %}
+    </div>
+  </div>
+
+
+{% else %}
+  <p class="freshness">
+    Every time the assistant handed over &mdash; what it was in the middle of
+    at that moment. Kept from 4 September onwards: before that each handover
+    overwrote the one before it, so the earlier ones no longer exist.
+  </p>
+
+  <nav class="tagrow">
+    {% for key, label in [("all", "All"),
+                          ("system", "System"),
+                          ("manual", "By hand")] %}
+      <a class="tag{{ ' on' if handoff_kind == key }}"
+         href="?tab=handoff&amp;kind={{ key }}">
+        {{ label }} <span class="n">{{ handoff_counts.get(key, 0) }}</span>
+      </a>
+    {% endfor %}
+  </nav>
+
+  {% if not handoffs %}
+    <p class="empty">
+      {% if handoff_kind == "manual" %}
+        None by hand yet. Ask the assistant to save where it has got to and
+        it will appear here.
+      {% elif handoff_kind == "system" %}
+        None from a recycle yet.
+      {% else %}
+        None recorded yet. One is kept every time the session is recycled,
+        and every time somebody saves the state by hand.
+      {% endif %}
+    </p>
+  {% else %}
+    <div class="calrow">
+      <ol class="timeline">
+        {% for one in handoffs %}
+          {% set showing = opened and opened.name == one.name %}
+          <li class="{{ 'on' if showing }}">
+            {# Pressing the open one again closes it. reported 2026-09-04:
+                — there was no way back out: the
+               link only ever ADDED `h=`, so once a handover was open the
+               only way to close it was the tab strip. #}
+            <a href="?tab=handoff&amp;kind={{ handoff_kind }}{% if not showing %}&amp;h={{ one.name }}{% endif %}">
+              <span class="when">{{ one.at.strftime('%a %d %b · %H:%M') }}</span>
+              <span class="tag {{ one.kind }}">{{ 'By hand' if one.by_hand else 'System' }}</span>
+              <span class="why">{{ one.why }}</span>
+            </a>
+          </li>
+        {% endfor %}
+      </ol>
+
+      <div class="daydetail">
+        {% if opened %}
+          <div class="agendahead">
+            {{ opened.at.strftime('%A %d %B %Y, %H:%M') }}
+            <span class="tag {{ opened.kind }}">{{ 'By hand' if opened.by_hand else 'System' }}</span>
+            {# The obvious way out, next to the thing it closes. The toggle on
+               the list works too, but nobody looks for a close button over
+               there. #}
+            <a class="closedetail"
+               href="?tab=handoff&amp;kind={{ handoff_kind }}"
+               title="Close" aria-label="Close">&times;</a>
+          </div>
+          <pre class="plain">{{ opened.detail }}</pre>
+        {% else %}
+          <p class="empty">Pick one on the left to read what it was holding.</p>
+        {% endif %}
+      </div>
+    </div>
+  {% endif %}
+{% endif %}
+
+
+{# ------------------------------------------------------------- dreaming #}
+{% if tab == "dreaming" %}
+
+  <p class="freshness">
+    Between actions, the agents in Stanford&rsquo;s <i>Generative Agents</i>
+    study stopped and <b>reflected</b>: they read back over their recent
+    memories and asked what they could now conclude, then kept the
+    conclusions rather than re-deriving them from a thousand observations.
+    This does the same thing over your notes, once a night.
+  </p>
+
+  {# SAID PLAINLY, because the maintainer asked for this and that repository cannot be
+     installed -- it is a Django frontend plus a simulation backend and an
+     OpenAI key, with no package to depend on. What is here is the idea,
+     implemented against this assistant's own memory. Claiming otherwise
+     would be a claim nobody could check until they went looking. #}
+  <p class="sub">
+    The idea is theirs; the code is this package&rsquo;s. Their repository is
+    a research simulation of twenty-five agents in a town, not a library, so
+    there is nothing to install &mdash; what is borrowed is the reflection
+    step.
+  </p>
+
+  <p>
+    {% if dreaming.on %}<span class="badge on">on</span>
+      &mdash; nightly at <b>{{ dreaming.at() }}</b>
+    {% elif dreaming.saved_but_not_running %}<span class="badge bad">not running</span>
+    {% else %}<span class="badge">off</span>{% endif %}
+  </p>
+
+  {% if dreaming.saved_but_not_running %}
+    <div class="note bad">
+      It is written down but the scheduler does not have it, so nothing would
+      happen at {{ dreaming.at() }}. Switching it on again re-registers it.
+    </div>
+  {% endif %}
+
+  <form method="post" action="/memory/dreaming" class="row tight">
+    <input type="hidden" name="token" value="{{ token }}">
+    <input type="hidden" name="action" value="on">
+    <label>Dream at
+      <input type="number" name="hour" min="0" max="23"
+             value="{{ dreaming.hour }}" style="width:5rem">
+    </label>
+    <label>:
+      <input type="number" name="minute" min="0" max="59"
+             value="{{ dreaming.minute }}" style="width:5rem">
+    </label>
+    <button type="submit" class="primary">
+      {% if dreaming.on %}Move it{% else %}Turn it on{% endif %}</button>
+  </form>
+
+  {% if dreaming.on or dreaming.saved_but_not_running %}
+    <form method="post" action="/memory/dreaming" class="inline">
+      <input type="hidden" name="token" value="{{ token }}">
+      <input type="hidden" name="action" value="off">
+      <button type="submit">Turn it off</button>
+    </form>
+  {% endif %}
+
+  <p class="freshness warn">
+    One model call a night, for ever. That is why it ships off rather than
+    on. It writes what it concludes into memory and does not message you
+    &mdash; if you want to hear about it, that is a switch on
+    <a href="/notifications">Notifications</a>.
+  </p>
+
+  <p class="freshness">
+    It runs as an ordinary scheduled task, so it also appears on
+    <a href="/schedule?tab=loop">Schedule</a> under Loops, where you can see
+    when it last ran. There is only one scheduler in here, and this is it.
+  </p>
+
+{% endif %}
+
+
+{# -------------------------------------------------------- self-optimise #}
+{% if tab == "optimise" %}
+  {% include "_optimise.html" %}
+{% endif %}
+
+
+{# --------------------------------------------------------- vector store #}
+{% if tab == "vectors" %}
+
+  <p class="freshness">
+    Two different jobs, and only the second one needs a database.
+  </p>
+
+  <p class="sub">
+    <b>Your notes.</b> A few hundred short facts. Matching them by meaning
+    finds &ldquo;the roof leak job&rdquo; when what you wrote was
+    &ldquo;water ingress at the Hatfield site&rdquo;. That has worked for a
+    while on a plain index and needs nothing here.
+  </p>
+  <p class="sub">
+    <b>Your documents.</b> The shelf on
+    <a href="/knowledge">Knowledge</a> stores a <i>pointer</i> to each file,
+    not the file &mdash; so a two-hundred-page document you added is known
+    about and has never been read. Splitting it into passages and storing
+    those is what lets a question be answered with the paragraph that answers
+    it, and told where it came from.
+  </p>
+
+  <h2 class="section">Your notes</h2>
+
+  {# THE SWITCH THAT USED TO BE ON THE KNOWLEDGE PAGE.
+     Moving the section without moving this would have made a working feature
+     unreachable -- which is worse than leaving it where it was, and is the
+     exact mistake a tidy-up makes when it moves markup instead of moving a
+     capability. #}
+  <p>
+    {% if meaning.enabled %}<span class="badge on">on</span>
+      &mdash; {{ meaning.indexed }} note(s) indexed
+    {% elif meaning.available %}<span class="badge">off</span>
+    {% else %}<span class="badge bad">not installed</span>{% endif %}
+  </p>
+
+  {% if meaning.available %}
+    <form method="post" action="/memory/meaning" class="inline">
+      <input type="hidden" name="token" value="{{ token }}">
+      <input type="hidden" name="action" value="{{ 'off' if meaning.enabled else 'on' }}">
+      <button type="submit" class="{{ '' if meaning.enabled else 'primary' }}">
+        {{ 'Turn off' if meaning.enabled else 'Turn on' }}</button>
+    </form>
+    {% if meaning.enabled %}
+      <form method="post" action="/memory/meaning" class="inline">
+        <input type="hidden" name="token" value="{{ token }}">
+        <input type="hidden" name="action" value="reindex">
+        <button type="submit">Rebuild</button>
+      </form>
+      <p class="sub">Word matches always come first. Meaning matches are added
+        after them and never replace one &mdash; this can show you something
+        extra, and cannot take away a result you were relying on.</p>
+    {% endif %}
+  {% else %}
+    <p class="sub">This needs the same embedding library the documents do, so
+      setting up the store below switches it on for your notes as well.</p>
+  {% endif %}
+
+  <h2 class="section">Your documents</h2>
+
+  {% if not vectors.ready %}
+    <p><span class="badge bad">not set up</span></p>
+    <p class="freshness">It needs these, and they are fetched only if you
+      ask:</p>
+    <ul>
+      {% for piece in vectors.pieces %}
+        <li>
+          {% if piece.here %}<span class="pill ok">here</span>
+          {% else %}<span class="pill">to fetch</span>{% endif %}
+          <code>{{ piece.name }}</code> &mdash; {{ piece.why }}
+        </li>
+      {% endfor %}
+    </ul>
+
+    {# ONE BUTTON FOR ALL THREE. Three separate installs is three chances to
+       stop half way and end up able to embed but not store -- a state that
+       reports itself as neither working nor broken. #}
+    <form method="post" action="/memory/vectors"
+          data-working="Fetching what the vector store needs"
+          data-working-note="Several hundred megabytes, and some minutes. It
+                             is safe to leave this page open.">
+      <input type="hidden" name="token" value="{{ token }}">
+      <input type="hidden" name="action" value="install">
+      <button type="submit" class="primary">Set it up</button>
+    </form>
+
+  {% else %}
+    <p>
+      {% if vectors.passages %}<span class="badge on">ready</span>
+        &mdash; {{ vectors.documents }} document(s),
+        {{ vectors.passages }} passage(s)
+      {% else %}<span class="badge">ready, nothing read yet</span>{% endif %}
+    </p>
+
+    <form method="post" action="/memory/vectors" class="inline"
+          data-working="Reading your documents"
+          data-working-note="Every document on the shelf, split into passages.
+                             A long one takes a while.">
+      <input type="hidden" name="token" value="{{ token }}">
+      <input type="hidden" name="action" value="index">
+      <button type="submit" class="primary">
+        {% if vectors.passages %}Read them again{% else %}Read my documents{% endif %}
+      </button>
+    </form>
+
+    {% if vectors.passages %}
+      <form method="post" action="/memory/vectors" class="inline"
+            {# The blank line used to be a real line break inside the JS
+               string literal, served verbatim, so the handler was a syntax
+               error and never ran -- "Clear the store" cleared it with no
+               question asked. `\n` is the escape; a newline is not.
+               2026-09-05. #}
+            onsubmit="return confirm('Throw away what has been read?\n\nYour documents are not touched.');">
+        <input type="hidden" name="token" value="{{ token }}">
+        <input type="hidden" name="action" value="forget">
+        <button type="submit">Clear the store</button>
+      </form>
+    {% endif %}
+
+    <p class="freshness">Kept in <code>{{ vectors.where }}</code>. It can be
+      cleared and rebuilt at any time &mdash; nothing in it is yours, it is
+      all read out of documents you already have.</p>
+  {% endif %}
+
+  {% if skipped %}
+    <div class="note">
+      <b>Not read:</b>
+      <ul>{% for one in skipped %}<li>{{ one }}</li>{% endfor %}</ul>
+      A scan with no text layer is the usual reason. Reading one of those
+      needs character recognition, which this does not do.
+    </div>
+  {% endif %}
+
+{% endif %}
+
+
+{# The two that used to be on this page. They answer "what exactly happened
+   at 18:08", which is a question for the day something is wrong -- so they
+   are a line at the foot rather than a tab. Not removed: without these
+   links nothing in the dashboard reaches either route. #}
+<p class="freshness underneath">
+  Underneath this: <a href="/events">every event</a> ·
+  <a href="/logs">the raw log files</a>
+</p>
+
+{% endblock %}

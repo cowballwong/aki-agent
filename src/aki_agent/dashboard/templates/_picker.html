@@ -1,0 +1,86 @@
+{# The picker the empty card on Today opens.
+
+   OUTSIDE `main`, and that is the whole reason this is its own file.
+
+   `main` carries `z-index: 1`, which makes it a stacking context: every
+   z-index inside it is measured within that 1. Rendered with the cards, the
+   backdrop's 120 lost to the rail's 20 -- `elementFromPoint` over the rail
+   returned NAV while the picker was up, so the navigation stayed live behind
+   a modal. The queue sheet had exactly this bug in August and again this
+   evening; this is the third time, so it is written down here.
+
+   Guarded on `pickable`, which only Today provides, so every other page
+   renders nothing. #}
+{% if pickable %}
+<div class="pickscrim" id="pick-scrim" hidden></div>
+<div class="picker" id="picker" hidden role="dialog" aria-modal="true"
+     aria-label="Add a project to Today">
+  <div class="pickhead">
+    <span>Add to Today</span>
+    <span class="pickroom">{{ favourites_max - favourites_pinned }} left</span>
+    <button type="button" class="queueclose" id="pick-close"
+            aria-label="Close">&times;</button>
+  </div>
+  <div class="pickbody">
+    {# Grouped by workspace, in the workspace's own order. With one workspace
+       configured there is exactly one group and its heading is empty, which
+       is the same shape without a heading nobody needs. #}
+    {% for group in pickable %}
+      {% if group.name %}<div class="pickgroup">{{ group.name }}</div>{% endif %}
+      {% for one in group.projects %}
+        <form method="post" action="/projects/pin">
+          <input type="hidden" name="token" value="{{ token }}">
+          <input type="hidden" name="key" value="{{ one.key }}">
+          <input type="hidden" name="back" value="/">
+          <button type="submit" class="pickrow"
+                  {{ 'disabled' if one.pinned }}>
+            <span class="picktitle">{{ one.title }}</span>
+            {% if one.pinned %}
+              <span class="pickon">on Today</span>
+            {% else %}
+              <span class="pickadd">Add</span>
+            {% endif %}
+          </button>
+        </form>
+      {% endfor %}
+    {% else %}
+      <p class="empty">Nothing to add — every project is already on Today.</p>
+    {% endfor %}
+  </div>
+</div>
+
+<script>
+/* The picker. Deliberately the same three moves as the queue sheet: a
+   backdrop element rather than a document-level click listener, Escape, and
+   a close button -- three ways out, none of which has to decide whether a
+   click was "inside". */
+(function () {
+  var open = document.getElementById('addfavour');
+  var box = document.getElementById('picker');
+  var scrim = document.getElementById('pick-scrim');
+  var shutter = document.getElementById('pick-close');
+  if (!open || !box || !scrim) { return; }
+
+  function show() {
+    box.hidden = false;
+    scrim.hidden = false;
+    requestAnimationFrame(function () {
+      document.body.classList.add('pickup');
+    });
+  }
+  function hide() {
+    document.body.classList.remove('pickup');
+    /* Hidden after the fade, not during it: `display: none` mid-transition
+       makes the panel vanish rather than close. */
+    setTimeout(function () { box.hidden = true; scrim.hidden = true; }, 200);
+  }
+
+  open.addEventListener('click', show);
+  scrim.addEventListener('click', hide);
+  if (shutter) { shutter.addEventListener('click', hide); }
+  document.addEventListener('keydown', function (e) {
+    if (e.key === 'Escape') { hide(); }
+  });
+})();
+</script>
+{% endif %}

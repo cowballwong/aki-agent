@@ -1,0 +1,91 @@
+{% extends "base.html" %}
+{% from "_subtabs.html" import linked_subtabs %}
+{% block title %}Library{% endblock %}
+{% block heading %}Tools{% endblock %}
+{% block body %}
+
+{# The Library is the third tab of Tools. It keeps its own address -- the strip carries an
+   href per tab so that it can. See `navigation.py`. #}
+{{ linked_subtabs("library", [
+     ("skills", "Skills", "/yours?tab=skills"),
+     ("specialists", "Specialists", "/yours?tab=specialists"),
+     ("library", "Library", "/library")]) }}
+
+{# ADD, not "turn on".
+
+   Which is what the button already did -- `library.activate` copies a skill
+   into the folder Claude Code reads, and writes a specialist into the
+   specialists file, so either way it appears in one of the two lists next
+   door. The word was the only thing wrong: "turn on" describes a switch on
+   this page, and what actually happens is that a copy arrives somewhere
+   else. Now that the lists are one tab away, the sentence can say so. #}
+<p class="freshness">{{ items|length }} of {{ total }} shipped abilities.
+  Adding one puts a copy in your own Skills or Specialists list, where you
+  can edit it. The library itself is never changed, so an update cannot
+  overwrite what you have made of it.</p>
+
+{% if request.args.get('said') %}<div class="said">{{ request.args.get('said') }}</div>{% endif %}
+
+<form method="get" class="filters">
+  <input type="search" name="q" value="{{ chosen.q }}"
+         placeholder="Search name, description or keyword — 中文都得">
+  <select name="category">
+    <option value="">Any category</option>
+    {% for name in categories %}
+      <option value="{{ name }}" {{ 'selected' if chosen.category == name }}>{{ name }}</option>
+    {% endfor %}
+  </select>
+  <select name="industry">
+    <option value="">Any occupation</option>
+    {% for name in industries %}
+      <option value="{{ name }}" {{ 'selected' if chosen.industry == name }}>{{ name }}</option>
+    {% endfor %}
+  </select>
+  <select name="kind">
+    <option value="">Skills and specialists</option>
+    <option value="skill" {{ 'selected' if chosen.kind == 'skill' }}>Skills</option>
+    <option value="specialist" {{ 'selected' if chosen.kind == 'specialist' }}>Specialists</option>
+  </select>
+  <button type="submit" class="primary">Filter</button>
+  <a class="act" href="/library">Clear</a>
+</form>
+
+<div class="chips">
+  {% for name in categories %}
+    <a href="/library?category={{ name|urlencode }}"
+       class="{{ 'on' if chosen.category == name }}">{{ name }}</a>
+  {% endfor %}
+</div>
+
+{% for item in items %}
+  <div class="libitem">
+    <div class="who">
+      <b><a href="/library/{{ item.key }}">{{ item.name }}</a></b>
+      <span class="what">{{ item.description }}</span>
+      <div class="tags">
+        <span class="tag">{{ item.kind }}</span>
+        <span class="tag">{{ item.category }}</span>
+        {% if item.core %}<span class="tag">everyone</span>{% endif %}
+        {% for tag in item.industries if tag != '*' %}<span class="tag">{{ tag }}</span>{% endfor %}
+        {% if item.confidence != 'high' %}<span class="tag draft">draft — wants review</span>{% endif %}
+      </div>
+    </div>
+    <form method="post" action="/library/toggle">
+      <input type="hidden" name="token" value="{{ token }}">
+      <input type="hidden" name="key" value="{{ item.key }}">
+      <input type="hidden" name="back" value="{{ request.full_path }}">
+      <input type="hidden" name="state" value="{{ 'off' if item.key in active else 'on' }}">
+      {# Remove, not "turn off": the reverse of Add has to be the word that
+         says the copy goes away, or somebody will read it as a switch and
+         wonder where their edits went. The library keeps the original
+         either way. #}
+      <button type="submit" class="state {{ 'primary' if item.key not in active }}">
+        {{ 'Remove' if item.key in active else 'Add' }}
+      </button>
+    </form>
+  </div>
+{% else %}
+  <p class="empty">Nothing matches. <a href="/library">Clear the filters</a>.</p>
+{% endfor %}
+
+{% endblock %}

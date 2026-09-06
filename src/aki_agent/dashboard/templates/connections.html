@@ -1,0 +1,100 @@
+{% extends "base.html" %}
+{% from "_subtabs.html" import subtabs %}
+{% block heading %}Connections{% endblock %}
+{% block body %}
+{% macro howto(topic) %}<a class="howto" href="{{ url_for('guide_page', topic=topic) }}" title="How to set this up">how do I set this up?</a>{% endmacro %}
+
+
+<div class="note">
+  Secrets are never shown on this page, never put into a form field, and never
+  sent back to your browser. Everything below reports only whether something
+  is saved.
+</div>
+
+{% if fallback_warning %}<div class="note bad">{{ fallback_warning }}</div>{% endif %}
+
+{# Five routes on this page send a sentence back and, until 2026-08-20, not
+   one of them was displayed. The maintainer typed his sign-in code, the page reloaded
+   unchanged, and he concluded he had signed in — while the actual answer,
+   "your account has two-step verification on, put the password in", sat
+   unread in the query string. A form that answers silently is a form that
+   teaches people to guess. #}
+{% if note %}<div class="note">{{ note }}</div>{% endif %}
+
+
+{# Nine sections and 540 lines, and the one
+   somebody came for was usually below the fold.
+
+   Split by what is being connected, not by which module provides it -- the
+   same rule the Running page was split by. Two things stay outside the tabs
+   on purpose: the promise at the top that no secret is ever shown (it is
+   true of every tab, and a promise repeated four times reads as four
+   different promises), and where secrets are kept, which is one fact about
+   this computer rather than a connection. #}
+{{ subtabs("/connections", tab, [
+     ("gateway", "Gateway"),
+     ("mail", "Email"),
+     ("calendar", "Calendar"),
+     ("files", "Files")]) }}
+
+{% if tab == "mail" %}
+  {% include "_conn_mail.html" %}
+{% elif tab == "calendar" %}
+  {% include "_conn_calendar.html" %}
+{% elif tab == "files" %}
+  {% include "_conn_files.html" %}
+{% else %}
+  {% include "_conn_gateway.html" %}
+{% endif %}
+
+<h2><span class="ico">&#9673;</span>Where secrets are kept</h2>
+<div class="card">
+  {% if using_os_store %}
+    <p>Your operating system's password manager. <span class="badge on">good</span></p>
+  {% else %}
+    <p><span class="badge bad">no password manager found</span> &mdash; secrets fall back to a file in your own folder.</p>
+  {% endif %}
+</div>
+
+{# The script has to live INSIDE the block.
+
+   Jinja renders nothing that sits outside a block in a template that
+   extends another, so a <script> placed after the block has been closed is dropped
+   without a word -- no error, no console message, just a button that does
+   nothing when pressed. Found by audit on 2026-08-23; three templates had
+   it. #}
+<script>
+/* "edit" is the add form, opened with what is already there.
+   No second route and no second form: a separate edit path would be a second
+   place for the same rules to drift out of step, which is the failure this
+   package keeps finding in itself. */
+function _open(form) {
+  var box = form.closest('details');
+  if (box) { box.open = true; }
+  form.scrollIntoView({ behavior: 'smooth', block: 'center' });
+}
+
+function editMail(button) {
+  var form = document.getElementById('mailform');
+  if (!form) { return; }
+  form.address.value = button.dataset.address || '';
+  form.label.value = button.dataset.label || '';
+  form.imap_host.value = button.dataset.imap || '';
+  form.may_send.checked = button.dataset.send === '1';
+  /* The password is deliberately NOT filled: it is not readable from here,
+     and a blank box that keeps the stored one is safer than a box of dots
+     that might overwrite it with nothing. */
+  form.password.value = '';
+  _open(form);
+}
+
+function editCalendar(button) {
+  var form = document.getElementById('calform');
+  if (!form) { return; }
+  form.name.value = button.dataset.name || '';
+  form.url.value = '';
+  _open(form);
+  form.url.focus();
+}
+</script>
+{% endblock %}

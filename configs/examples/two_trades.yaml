@@ -1,0 +1,86 @@
+# Example configuration C — one person, two unrelated trades.
+#
+# An architect who teaches piano at weekends. This is not an exotic case: a
+# full-time job plus something done on Saturdays is an ordinary shape of life,
+# and the design assumed for a while that everybody does one kind of work.
+#
+# The two other examples in this folder prove the engine can serve an
+# architect OR a music teacher. This one proves it can serve both AT ONCE, in
+# one install, with one memory — because the schema is per workspace.
+#
+# WHAT TO NOTICE
+# --------------
+# `layout.fields` describes the work in `01_Work`. `workspace_schemas`
+# overrides it for `02_Personal` only. A workspace with no entry there
+# inherits the default schema, which is why an ordinary one-occupation config
+# never grows this section at all.
+
+schema_version: 1
+
+assistant:
+  name: "Wren"
+  tone: "Warm, brief. Say the awkward thing early."
+  colour: "#f59e0b"
+  logo: "◆"
+
+user:
+  name: "Nadia Halim"
+  identity_aliases:
+    - "Nadia Halim"
+    - "Nadia"
+    - "NH"
+  timezone: "Europe/London"
+  languages: ["en"]
+  occupation: "Architect during the week; piano teacher on Saturdays"
+
+layout:
+  root: "../../tests/fixtures/workspace_two_trades"
+
+  workspaces: ["01_Work", "02_Personal"]
+  sandbox_dir: "00_Sandbox"
+
+  # --- the default, used by 01_Work -------------------------------------
+  item_label: "Project"
+  item_label_plural: "Projects"
+  summary_files: [state, actions]
+
+  fields:
+    - key: stage
+      label: "Stage"
+      type: enum
+      values: ["Feasibility", "Design", "Planning", "On site", "Complete"]
+      source: frontmatter
+    - key: client
+      label: "Client"
+      type: text
+      source: frontmatter
+
+  # --- and the other half of her life -----------------------------------
+  #
+  # Nothing here is a synonym of anything above. That is the point: a merged
+  # set of fields would show every building project an empty Grade column and
+  # every pupil an empty Stage, which reads as "you haven't filled this in"
+  # rather than "this belongs to your other trade".
+  workspace_schemas:
+    02_Personal:
+      item_label: "Pupil"
+      item_label_plural: "Pupils"
+      summary_files: [state, actions]
+      fields:
+        - key: grade
+          label: "Grade"
+          type: text
+          source: frontmatter
+        - key: instrument
+          label: "Instrument"
+          type: text
+          source: frontmatter
+        - key: fees_settled
+          label: "Fees settled"
+          type: bool
+          source: frontmatter
+
+notifications:
+  enabled: true
+  quiet_hours: ["21:30", "07:30"]
+  urgent_keywords: ["site", "safety"]

@@ -1,0 +1,16 @@
+{% extends "base.html" %}
+{% block heading %}Notifications{% endblock %}
+{% block body %}
+{% if note %}<div class="note">{{ note }}</div>{% endif %}
+
+<p class="freshness">
+  When the assistant is allowed to interrupt you, and what it is holding
+  until it is.
+</p>
+
+{% include "_quiet.html" %}
+
+<h2 class="section">Held, waiting to be sent</h2>
+{% include "_notifications.html" %}
+
+{% endblock %}

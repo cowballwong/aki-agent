@@ -1,0 +1,19 @@
+{% extends "base.html" %}
+{% block heading %}Keys &amp; servers{% endblock %}
+{% block body %}
+<p class="freshness">What the assistant can reach beyond this computer — paid
+  services it holds a key for, MCP servers Claude Code can talk to, and
+  plugins somebody wrote that add a calendar or a way of reaching you.</p>
+
+{% if request.args.get('note') %}<div class="said">{{ request.args.get('note') }}</div>{% endif %}
+
+<h2 class="section">Service keys</h2>
+{% include "_tools.html" %}
+
+<h2 class="section">MCP servers</h2>
+{% include "_mcp.html" %}
+
+<h2 class="section" id="plugins">Plugins</h2>
+{% include "_plugins.html" %}
+
+{% endblock %}

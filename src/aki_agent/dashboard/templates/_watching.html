@@ -1,0 +1,47 @@
+<p class="freshness">
+  {% if working %}Working now &mdash; this updates as it goes.
+  {% else %}Nothing running at the moment. These are the last steps taken.{% endif %}
+</p>
+
+<div class="card">
+  <table id="steps">
+    <tbody>
+      {% for step in steps %}
+        <tr>
+          <td class="blank">{{ step.at }}</td>
+          <td><span class="kind kind-{{ step.kind }}">{{ step.tool or step.kind }}</span></td>
+          <td>{{ step.text }}</td>
+        </tr>
+      {% else %}
+        <tr><td colspan="3" class="empty">No steps recorded yet.</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+
+<script>
+// Polls only for what is new: the cursor is a line count, so a long session
+// costs the same per poll as a short one.
+(function () {
+  var cursor = {{ cursor }};
+  var body = document.querySelector('#steps tbody');
+
+  setInterval(function () {
+    fetch('/api/session/steps?since=' + cursor)
+      .then(function (r) { return r.json(); })
+      .then(function (data) {
+        cursor = data.cursor;
+        data.steps.forEach(function (step) {
+          var row = document.createElement('tr');
+          row.innerHTML =
+            '<td class="blank"></td><td><span class="kind"></span></td><td></td>';
+          row.children[0].textContent = step.at;
+          row.children[1].firstChild.textContent = step.tool || step.kind;
+          row.children[2].textContent = step.text;
+          body.appendChild(row);
+        });
+      })
+      .catch(function () { /* a poll that fails is not worth a dialog */ });
+  }, 4000);
+})();
+</script>

@@ -1,0 +1,130 @@
+{% extends "base.html" %}
+{% block title %}Workflows{% endblock %}
+{% block heading %}Workflows{% endblock %}
+{% block body %}
+
+{% if note %}<div class="note">{{ note }}</div>{% endif %}
+
+<p class="freshness">Whole jobs, installed as folders. A workflow owns a project
+  folder, carries its own sign-off gates, stops for the judgements only you can
+  make, and ends in something you can hand over. That is what makes it a
+  workflow rather than a skill: a skill is one move, a workflow is the whole
+  job. Workflows added on their own live in <code>{{ workflows_dir }}</code>,
+  beside your settings, so an update never overwrites them — and any a plugin
+  brought with it are listed here too, from inside that plugin's own folder.</p>
+
+<p class="rowtools">
+  <a class="btn primary" href="/workflows?add=1">+ Add a workflow pack</a>
+</p>
+
+{% include "_workflows.html" %}
+
+{# Asked for on 2026-09-05: adding a workflow pack opens a file picker.
+
+   Two steps, kept as two on purpose. The sheet looks at the pack and says
+   what is in it; installing is a second press against what it found. The
+   consent sentence is the whole reason -- a workflow's code runs as you, and
+   agreeing to that before seeing what arrived is agreeing to nothing. #}
+<dialog id="packform" class="sheet" {{ 'open' if showing_form }}>
+  <div class="sheethead">
+    <b>Add a workflow pack</b>
+    <a class="btn" href="/workflows">Close</a>
+  </div>
+
+  <p class="freshness">Pick a pack — a <code>.zip</code>, or the folder one was
+    unzipped into. Nothing is copied until you have seen what it contains, and
+    nothing in it runs on install.</p>
+
+  <form method="post" action="/workflows/check">
+    <input type="hidden" name="token" value="{{ token }}">
+    <label id="packwhere">Which pack</label>
+    <div class="row tight">
+      <input type="text" name="source" id="packsource"
+             placeholder="Pick a .zip, or a folder"
+             value="{{ pending.source if pending else '' }}">
+      <button type="button" id="packfile">Choose a file…</button>
+      <button type="button" id="packfolder">Choose a folder…</button>
+    </div>
+    <button type="submit" class="primary">Look at it</button>
+  </form>
+
+  {% if pending %}
+    {% if pending.problem %}
+      <p class="warn">{{ pending.problem }}</p>
+    {% else %}
+      <div class="card">
+        <b>{{ pending.title or pending.name }}</b>
+        {% if pending.version %}<span class="mono">{{ pending.version }}</span>{% endif %}
+        {% if pending.description %}<div class="freshness">{{ pending.description }}</div>{% endif %}
+        <ul>
+          {% if pending.counts %}
+            <li>contains
+              {% for kind, n in pending.counts.items() %}{{ n }} {{ kind }}{% if not loop.last %}, {% endif %}{% endfor %}
+            </li>
+          {% endif %}
+          {% if pending.deliverable %}<li>produces <span class="mono">{{ pending.deliverable }}</span></li>{% endif %}
+          {% if pending.gates %}<li>sign-off gates: {{ pending.gates|join(', ') }}</li>{% endif %}
+          {% for w in pending.warnings %}<li class="warn">{{ w }}</li>{% endfor %}
+        </ul>
+        <p class="freshness">Installing a workflow means trusting whoever wrote
+          it with everything this assistant can reach. Nothing runs now, but
+          running it later executes its code as you.</p>
+        <form method="post" action="/workflows/add">
+          <input type="hidden" name="token" value="{{ token }}">
+          <input type="hidden" name="source" value="{{ pending.source }}">
+          <button type="submit" class="primary">Install it</button>
+        </form>
+      </div>
+    {% endif %}
+  {% endif %}
+</dialog>
+
+<script>
+/* Two pickers on one field, because a pack arrives as either.
+ *
+ * The request was a file-picker window -- and a workflow
+ * is just as often the folder somebody unzipped, which `examine()` accepts
+ * too. Offering only one of them would make the other look unsupported. The
+ * field still takes a typed path, which is what happens when the dashboard
+ * has no desktop to draw a dialog on. */
+(function () {
+  var box = document.getElementById('packsource');
+  var pickFile = document.getElementById('packfile');
+  var pickFolder = document.getElementById('packfolder');
+  if (!box) { return; }
+
+  var TOKEN = {{ token | tojson }};
+
+  function ask(button, where) {
+    button.addEventListener('click', function () {
+      var waiting = button.textContent;
+      button.disabled = true;
+      button.textContent = 'Pick it in the window…';
+
+      var body = new FormData();
+      body.append('token', TOKEN);
+      body.append('at', box.value.trim());
+      fetch(where, {method: 'POST', body: body})
+        .then(function (r) { return r.json(); })
+        .then(function (data) {
+          button.disabled = false;
+          button.textContent = waiting;
+          /* No fallback list here, unlike the shelf and the schedule. A pack
+             is a file somebody just downloaded, so the honest answer when no
+             dialog can be opened is to say so and let them paste the path --
+             a second folder-walker would be a third copy of one to maintain. */
+          if (data.path) { box.value = data.path; }
+        })
+        .catch(function () {
+          button.disabled = false;
+          button.textContent = waiting;
+        });
+    });
+  }
+
+  if (pickFile) { ask(pickFile, '/knowledge/files/native'); }
+  if (pickFolder) { ask(pickFolder, '/schedule/folders/native'); }
+})();
+</script>
+
+{% endblock %}

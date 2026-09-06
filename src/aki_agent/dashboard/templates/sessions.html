@@ -1,0 +1,6 @@
+{% extends "base.html" %}
+{% block heading %}Sessions{% endblock %}
+{% block body %}
+{% if request.args.get('said') %}<div class="said">{{ request.args.get('said') }}</div>{% endif %}
+{% include "_sessions.html" %}
+{% endblock %}

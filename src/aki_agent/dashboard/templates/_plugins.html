@@ -1,0 +1,105 @@
+<p class="freshness">A plugin is a box. Inside it there may be
+  <b>tools</b> (new abilities, like a calendar), <b>skills</b> (how to do
+  something), <b>workflows</b> (whole jobs) and <b>panels</b> (screens) — a
+  whole trade arriving as one thing, and leaving again as one thing. Installed
+  ones live in <code>{{ plugins_dir }}</code>, beside your settings, so an
+  update never overwrites them.</p>
+
+<table>
+  <thead><tr><th>Name</th><th>Adds</th><th>State</th><th></th></tr></thead>
+  <tbody>
+    {% for one in plugins %}
+      <tr>
+        <td>
+          <b>{{ one.name }}</b>{% if one.version %} <span class="mono">{{ one.version }}</span>{% endif %}
+          {% if one.description %}<div class="freshness">{{ one.description }}</div>{% endif %}
+        </td>
+        <td class="mono">
+          {% if one.registered %}{{ one.registered|join(', ') }}{% endif %}
+          {% if one.contents %}
+            {% if one.registered %}<br>{% endif %}
+            {% for kind, n in one.contents.items() %}{% if kind != 'tools' %}{{ n }} {{ kind }}{% if not loop.last %}<br>{% endif %}{% endif %}{% endfor %}
+          {% endif %}
+          {% if not one.registered and not one.contents %}&mdash;{% endif %}
+        </td>
+        <td>
+          {% if one.problem %}
+            {# Installed and broken is its own state. Hiding it would make the
+               software look like it does not have something it is carrying. #}
+            <span class="pill warn">will not load</span>
+            <div class="freshness">{{ one.problem }}</div>
+          {% elif one.registered or one.contents %}
+            {# Carrying only skills or a workflow counts as working. It
+               registers nothing into the seams and there is nothing wrong
+               with it. #}
+            <span class="pill ok">working</span>
+          {% else %}
+            <span class="pill">added nothing</span>
+          {% endif %}
+        </td>
+        <td>
+          <form method="post" action="/plugins/remove" class="inline"
+                data-confirm="Remove the {{ one.name | js }} plugin?"
+                data-consequence="Its folder is deleted. This cannot be undone.">
+            <input type="hidden" name="token" value="{{ token }}">
+            <input type="hidden" name="name" value="{{ one.name }}">
+            <button type="submit">Remove</button>
+          </form>
+        </td>
+      </tr>
+    {% else %}
+      <tr><td colspan="4" class="empty">Nothing installed yet.</td></tr>
+    {% endfor %}
+  </tbody>
+</table>
+
+<h3 class="section">Add one</h3>
+
+{% if pending %}
+  {% if pending.problem %}
+    <div class="said">{{ pending.problem }}</div>
+  {% else %}
+    {# Two steps on purpose. A plugin is code that will run as you, and
+       nobody can agree to something they have not been shown. #}
+    <div class="panel">
+      <p><b>{{ pending.name }}</b>{% if pending.version %} {{ pending.version }}{% endif %}
+        {% if pending.description %}&mdash; {{ pending.description }}{% endif %}</p>
+      {% if pending.contents %}
+        <p class="freshness">Contains:
+          <span class="mono">{% for kind, n in pending.contents.items() %}{{ n }} {{ kind }}{% if not loop.last %}, {% endif %}{% endfor %}</span></p>
+      {% endif %}
+      {% if pending.provides %}
+        <p class="freshness">Adds: <span class="mono">{{ pending.provides|join(', ') }}</span></p>
+      {% endif %}
+      <p class="freshness mono">{{ pending.source }}</p>
+      {% for warning in pending.warnings %}
+        <p class="freshness"><b>!</b> {{ warning }}</p>
+      {% endfor %}
+
+      <p><b>A plugin is code that runs as you</b>, with your mail, your
+        calendars and your files in reach. There is no sandbox. Install one
+        only if you trust whoever wrote it.</p>
+
+      <form method="post" action="/plugins/install">
+        <input type="hidden" name="token" value="{{ token }}">
+        <input type="hidden" name="source" value="{{ pending.source }}">
+        <button type="submit">Install it</button>
+        <a class="act" href="/keys#plugins">Cancel</a>
+      </form>
+    </div>
+  {% endif %}
+{% endif %}
+
+<form method="post" action="/plugins/check" class="filters">
+  <input type="hidden" name="token" value="{{ token }}">
+  <input type="text" name="source" value=""
+         placeholder="A folder or a .zip on this computer">
+  <button type="submit">Check it</button>
+</form>
+
+{# "Nothing is copied" corrected 2026-09-05: `plugins.examine` extracts the
+   zip into a temporary folder to read it. Nothing is INSTALLED, which is the
+   promise worth making. #}
+<p class="freshness">Nothing is installed until you have seen what it adds and
+  pressed Install. The same thing from a terminal is
+  <code>aki plugin add &lt;folder or zip&gt; --yes</code>.</p>

@@ -1,0 +1,170 @@
+{# Same shape as the skills list -- title, Open, Edit -- for the same reason.
+   This page was the longer of the two: a card of explanation, a table,
+   and then a ten-row form. #}
+
+<p class="freshness">
+  Narrow roles the assistant can hand a bounded piece of work to. Each one runs
+  on its own, reads what it needs, and reports back &mdash; so deep work does
+  not fill up the conversation you are having.
+</p>
+
+<div class="note">
+  A specialist is read-only unless you say otherwise, never sends anything to
+  anyone, and treats everything it reads as information rather than
+  instructions. Those three rules are added to every brief automatically.
+</div>
+
+<h2>Already here</h2>
+<div class="rowitem">
+  <div class="rowhead">
+    <b>{{ built_in.name }}</b>
+    {% if built_in_on %}<span class="pill ok">on</span>
+    {% else %}<span class="pill warn">off</span>{% endif %}
+    <span class="pill">read-only</span>
+    <span class="pill">built in</span>
+    <span class="rowacts">
+      <form method="post" action="/specialists/sentinel" class="inline">
+        <input type="hidden" name="token" value="{{ token }}">
+        <input type="hidden" name="state" value="{{ 'off' if built_in_on else 'on' }}">
+        <button type="submit">{{ 'Turn it off' if built_in_on else 'Turn it back on' }}</button>
+      </form>
+    </span>
+  </div>
+  <details class="rowmore">
+    <summary>Open</summary>
+    <p class="freshness">{{ built_in.purpose }}</p>
+    {#
+      These two lines used to claim that drafts were "looked at before they are
+      shown, recorded or sent" when the switch was on, and that "nothing is
+      being verified before it goes out" when it was off (corrected
+      2026-08-23).
+
+      Neither was true. `sentinel.is_on()` is read in four places and every one
+      of them only prints something; `review()` deliberately ignores it, which
+      is right — somebody who asks for a check has asked for a check. But
+      nothing anywhere checks a draft without being asked, so the switch
+      governed the wording on this card and nothing else.
+
+      It gates something as of 2026-08-23, and exactly one thing: a draft is
+      checked before it is put in front of you. The maintainer asked for the switch to
+      default on, having been told what it costs.
+
+      Drafts only, and that is the whole design. Every check is a full model
+      consultation, so putting one in front of every outgoing message would
+      roughly double what a scheduled run costs — for questions and waiting
+      items, which are the assistant *asking* rather than asserting, that buys
+      nothing. A draft is the one thing here that goes out in your name.
+    #}
+    {% if built_in_on %}
+      <p class="freshness">Every draft is checked before you see it, and the
+        verdict sits with the draft on Today so it is in front of you at the
+        moment you decide. It reports; it never rewrites, and it never holds a
+        draft back &mdash; a draft that could not be checked still reaches you,
+        saying so.</p>
+      <p class="freshness">You can also ask at any time: say &ldquo;check
+        this&rdquo; in a session, or run the <code>check</code> command.</p>
+      <p class="freshness warn">One model call per draft. Nothing else is
+        checked automatically &mdash; not questions, not messages &mdash;
+        because those are the assistant asking rather than asserting.</p>
+    {% else %}
+      <p class="freshness warn">Switched off. Drafts reach you unchecked.
+        Asking for a check still runs one &mdash; refusing on the strength of
+        an earlier preference would be the software arguing with you.</p>
+    {% endif %}
+    <p class="freshness">To shape it to your own work, add one of your own
+      rather than editing this &mdash; that way an update cannot overwrite
+      your version, and your version cannot weaken this one.</p>
+  </details>
+</div>
+
+<h2>Your own</h2>
+
+<p class="rowtools">
+  <a class="btn primary" href="/yours?tab=specialists&amp;add=1">+ Add a specialist</a>
+</p>
+
+{% if specialists %}
+<div class="stack">
+  {% for one in specialists %}
+    <div class="rowitem">
+      <div class="rowhead">
+        <b>{{ one.name }}</b>
+        {% if one.may_write %}<span class="pill warn">may write</span>
+        {% else %}<span class="pill ok">read-only</span>{% endif %}
+        {% set trouble = one.problems() %}
+        {% if trouble %}<span class="pill bad">{{ trouble|length }} to fix</span>{% endif %}
+        <span class="rowacts">
+          <a class="btn" href="/yours?tab=specialists&amp;edit={{ one.key|urlencode }}">Edit</a>
+          <form method="post" action="/specialists/delete" class="inline"
+                onsubmit="return confirm('Delete {{ one.name | js }}?')">
+            <input type="hidden" name="token" value="{{ token }}">
+            <input type="hidden" name="key" value="{{ one.key }}">
+            <button type="submit">Delete</button>
+          </form>
+        </span>
+      </div>
+      <details class="rowmore">
+        <summary>Open</summary>
+        <p class="freshness"><b>What it is for.</b> {{ one.purpose }}</p>
+        {% for problem in trouble %}
+          <div class="blank warn">{{ problem }}</div>
+        {% endfor %}
+        <p class="freshness">
+          Reads {{ one.reads|join(', ') if one.reads else 'the whole workspace' }}
+          &middot; stops after {{ one.timeout_seconds }}s
+          &middot; <code>{{ one.key }}</code>
+        </p>
+        <pre class="rowbody">{{ one.brief }}</pre>
+      </details>
+    </div>
+  {% endfor %}
+</div>
+{% else %}
+  <p class="empty">None yet.</p>
+{% endif %}
+
+{% if questions %}
+<h2>Not sure what to add?</h2>
+<div class="card">
+  <p class="freshness">Your answers to these usually are the specialists:</p>
+  <ul>{% for question in questions %}<li>{{ question }}</li>{% endfor %}</ul>
+</div>
+{% endif %}
+
+<dialog id="specialistform" class="sheet" {{ 'open' if showing_form }}>
+  <div class="sheethead">
+    <b>{% if editing %}Edit &ldquo;{{ editing.name }}&rdquo;
+       {% else %}Add a specialist{% endif %}</b>
+    <a class="btn" href="/yours?tab=specialists">Close</a>
+  </div>
+
+  <form method="post" action="/specialists/save">
+    <input type="hidden" name="token" value="{{ token }}">
+    <input type="hidden" name="key" value="{{ editing.key if editing else '' }}">
+
+    <label>Name<input name="name" placeholder="Second reader"
+      value="{{ editing.name if editing else '' }}"></label>
+
+    <label>What it is for (this decides when it gets used)
+      <input name="purpose" value="{{ editing.purpose if editing else '' }}"
+             placeholder="reads a draft properly before I send it"></label>
+
+    <label>How it should work<textarea name="brief" rows="10">{{ editing.brief if editing else specialist_starter.brief }}</textarea></label>
+
+    <div class="row">
+      <label>Folders it may read (comma separated, blank = all)
+        <input name="reads" value="{{ editing.reads|join(', ') if editing else '' }}"></label>
+      <label>Time limit (seconds)
+        <input name="timeout_seconds" type="number" min="30" max="3600"
+               value="{{ editing.timeout_seconds if editing else 600 }}"></label>
+    </div>
+
+    <label class="tickline"><input type="checkbox" name="may_write"
+      {{ 'checked' if editing and editing.may_write }}> allow it to write files</label>
+    <p class="freshness">Leave that unticked unless you have a reason. Most of
+      the value is in the reading.</p>
+
+    <button type="submit" class="primary">
+      {% if editing %}Save changes{% else %}Add specialist{% endif %}</button>
+  </form>
+</dialog>

@@ -1,0 +1,379 @@
+{% extends "base.html" %}
+{% block title %}Today{% endblock %}
+{% block heading %}Today{% endblock %}
+{% block body %}
+
+{#
+  The landing page, asked for by the maintainer 2026-08-19 and modelled on the one he
+  uses himself: three gauges, the weather, a row of counts, then the calendar.
+
+  Every panel here says when it does not know. A dashboard that prints a
+  confident zero is worse than one that says "no calendar connected", because
+  the first cannot be told apart from a quiet day.
+#}
+
+{% if note %}<div class="note">{{ note }}</div>{% endif %}
+
+{# A strip, not three panels. The mockup puts the time, the weather
+   and whether anything is running on one line beside the title —
+   they are the day's context, not the day's content. #}
+<div class="todaybar">
+  <div class="clock" id="clock">
+    <div class="time">
+      <span class="d" data-part="h">--</span><span class="sep">:</span><span class="d" data-part="m">--</span><span class="d secs" data-part="s">--</span>
+    </div>
+    <div class="date">{{ today_date.strftime('%A %d %B %Y') }}</div>
+  </div>
+
+  <div class="strip-row">
+    <div class="weather">
+      {% if page.weather.known %}
+        {# DRAWN AND ANIMATED HERE, not generated and not an emoji.
+
+
+
+           The key was offered and is not used, because a generated picture is
+           the wrong material for this job in three ways: it is a raster, so
+           it softens on a retina screen and at the larger size he asked for;
+           its colours are baked in, so it cannot follow the accent he picks
+           in Settings or invert between day and night; and it cannot move.
+           Getting six of them consistent enough to sit in one strip is also a
+           run of luck rather than a build step.
+
+           These are vectors that take `currentColor` from the theme, animate
+           in CSS, and cost nothing to draw. #}
+        {% set kind = page.weather.description | weather_kind %}
+        <div class="sky {{ kind }} {{ 'day' if page.weather.is_day else 'night' }}"
+             title="{{ page.weather.description }}">
+          <svg viewBox="0 0 64 64" aria-hidden="true">
+            {% if kind == 'sun' %}
+              {% if page.weather.is_day %}
+                <g class="rays">
+                  {% for angle in [0, 45, 90, 135, 180, 225, 270, 315] %}
+                    <line x1="32" y1="6" x2="32" y2="13"
+                          transform="rotate({{ angle }} 32 32)"/>
+                  {% endfor %}
+                </g>
+                <circle class="core" cx="32" cy="32" r="12"/>
+              {% else %}
+                {# A crescent cut from one circle by another, so it keeps a
+                   single stroke weight instead of reading as two shapes. #}
+                <path class="moon"
+                      d="M40 14a20 20 0 1 0 10 26 16 16 0 0 1-10-26z"/>
+                <g class="stars">
+                  <circle cx="16" cy="18" r="1.6"/>
+                  <circle cx="24" cy="10" r="1.1"/>
+                  <circle cx="12" cy="30" r="1.1"/>
+                </g>
+              {% endif %}
+
+            {% elif kind == 'cloud' %}
+              {% if not page.weather.is_day %}<circle class="behind" cx="44" cy="20" r="7"/>{% endif %}
+              <path class="cloud" d="M18 44h28a10 10 0 0 0 0-20 14 14 0 0 0-27 4 8 8 0 0 0-1 16z"/>
+
+            {% elif kind == 'rain' %}
+              <path class="cloud" d="M18 38h28a10 10 0 0 0 0-20 14 14 0 0 0-27 4 8 8 0 0 0-1 16z"/>
+              <g class="drops">
+                {% for x in [22, 32, 42] %}
+                  <line class="d{{ loop.index }}" x1="{{ x }}" y1="44" x2="{{ x - 3 }}" y2="53"/>
+                {% endfor %}
+              </g>
+
+            {% elif kind == 'snow' %}
+              <path class="cloud" d="M18 38h28a10 10 0 0 0 0-20 14 14 0 0 0-27 4 8 8 0 0 0-1 16z"/>
+              {# NESTED ON PURPOSE. The outer <g> carries the position as an
+                 SVG attribute; the inner one is what CSS animates. A CSS
+                 `transform` REPLACES the attribute rather than adding to it,
+                 so a single group with both put every flake back at the
+                 origin -- one blue speck in the top-left corner, nowhere near
+                 its cloud. #}
+              <g class="flakes">
+                {% for x in [22, 32, 42] %}
+                  <g transform="translate({{ x }} 48)">
+                    <g class="f{{ loop.index }}">
+                      <line x1="0" y1="-4" x2="0" y2="4"/>
+                      <line x1="-3.5" y1="-2" x2="3.5" y2="2"/>
+                      <line x1="-3.5" y1="2" x2="3.5" y2="-2"/>
+                    </g>
+                  </g>
+                {% endfor %}
+              </g>
+
+            {% elif kind == 'storm' %}
+              <path class="cloud" d="M18 36h28a10 10 0 0 0 0-20 14 14 0 0 0-27 4 8 8 0 0 0-1 16z"/>
+              <polyline class="bolt" points="34,40 25,52 32,52 27,60"/>
+
+            {% else %}
+              <g class="haze">
+                <line class="h1" x1="12" y1="24" x2="52" y2="24"/>
+                <line class="h2" x1="10" y1="34" x2="46" y2="34"/>
+                <line class="h3" x1="16" y1="44" x2="52" y2="44"/>
+              </g>
+            {% endif %}
+          </svg>
+        </div>
+        <div class="temp">{{ page.weather.temperature | round | int }}&deg;</div>
+        <div class="what">
+          <b>{{ page.weather.description | capitalize }}</b>
+          <span>
+            {% if page.weather.low is not none %}
+              {{ page.weather.low | round | int }}&ndash;{{ page.weather.high | round | int }}&deg;
+            {% endif %}
+            {% if page.weather.rain_chance is not none %}
+              &middot; rain {{ page.weather.rain_chance }}%
+            {% endif %}
+          </span>
+          <span class="place">{{ page.weather.place }}</span>
+          {# Only when there is something to do about it -- see
+             `Weather.advice`. A card that comments on every kind of weather
+             is one people stop reading before the day it matters. #}
+          {% if page.weather.advice() %}
+            <span class="tip">{{ page.weather.advice() }}</span>
+          {% endif %}
+        </div>
+      {% else %}
+        <div class="what"><b>Weather</b><span>{{ page.weather.problem }}</span>
+          {# A card that reports a problem and offers no way to fix it is a
+             card that stays broken. reported 2026-08-20: "weather card 唔 work,
+             無地方俾我 set location" -- and he was right twice over, because
+             there was no field for it anywhere in the dashboard at all. #}
+          <a class="fixit" href="/settings#where">Set where you are</a>
+        </div>
+      {% endif %}
+    </div>
+
+    {# The running dot and "N scheduled task(s)" stood here until 2026-09-04.
+
+       He is right, and the reason it read as meaningless is that "idle" was
+       never about anything he does. It meant "no scheduled tasks are
+       INSTALLED", which is a fact about the machine's task scheduler, not
+       about whether the assistant is busy -- and phrased as `idle` beside a
+       clock it invited exactly the wrong reading. The same count is still on
+       the Scheduled work card, where it is next to the thing it counts. #}
+  </div>
+
+
+
+  {# The three meters, beside the weather rather than under it.
+
+     They are the same kind of thing as the clock and the sky:
+     context for the day rather than content of it.
+
+     Moving them up also empties the right-hand column, which is what
+     lets the calendar keep its agenda beside it and the favourite
+     cards grow taller. #}
+    <div class="gauges">
+      {# The share goes in the middle of the ring, the real figure underneath.
+
+
+         Which is the right way round: a ring already draws a proportion, so
+         a token count in the middle of it was the one number the shape was
+         not describing. The count still matters — it is just the supporting
+         figure, not the headline.
+
+         `This week` shows a percentage once its owner has named a weekly
+         figure to measure against, in Settings. Nothing here works one out:
+         a Claude subscription states its weekly limit in hours rather than
+         tokens, and no file on the machine records the plan — so until
+         somebody types a number, the week keeps its total and its ring stays
+         empty, which is what an empty ring has meant here all along. A
+         made-up denominator would put a number nobody can check in the most
+         prominent spot on the page. #}
+      {% macro gauge(fraction, centre, label, detail) %}
+        <div class="gauge">
+          <div class="ring">
+            <svg viewBox="0 0 100 100" aria-hidden="true">
+              <circle class="track" cx="50" cy="50" r="42"></circle>
+              {# No arc at all when there is nothing to compare against: a
+                 round line cap on a zero-length arc draws a dot, which reads
+                 as "just started" rather than "no scale for this". #}
+              {% if fraction is not none %}
+                <circle class="fill" cx="50" cy="50" r="42"
+                        stroke-dasharray="{{ (fraction * 264)|round(1) }} 264"></circle>
+              {% endif %}
+            </svg>
+            <div class="middle">{{ centre }}</div>
+          </div>
+          <div class="label">{{ label }}</div>
+          <div class="detail">{{ detail }}</div>
+        </div>
+      {% endmacro %}
+
+      {# THE FIVE-HOUR AND WEEKLY RINGS STOOD HERE UNTIL 2026-09-04.
+
+          -- said after being shown that neither could be filled
+         honestly. Nothing on this machine records the subscription's limits,
+         so both rings needed a number he would have had to invent, and every
+         attempt to derive one for him was worse than the blank:
+
+           - against the busiest five hours of his own week: fills faster in
+             a quiet week, shrinks for days after a heavy session;
+           - against the point where the service actually refused a request:
+             read on the real machine as 369M, and the very next window
+             reached 458M with no refusal, so the ring would have sat at 100%
+             while everything worked.
+
+         The totals themselves are still counted and still shown -- under the
+         chart below, where a figure with no denominator belongs. What is gone
+         is the shape that promised a proportion. #}
+      {# ONE RING, AND IT MEASURES THE SESSION THAT ACTUALLY GETS RESTARTED.
+
+         Two fixes in one.
+
+         The second was the reason the first was needed. This ring used to
+         read the newest transcript ANYWHERE on the machine, which on a
+         machine running more than one Claude Code session is somebody else's
+         window -- measured while writing this: 507K here against 43K in the
+         assistant's own session. A recycle threshold beside a number from a
+         different session would have been nonsense on the page.
+
+         So it now reads what `guard` reads: the session the auto-recycle will
+         restart. The ring fills toward the model's window and carries a notch
+         at the recycle mark, so both numbers are in one shape. #}
+      <div class="gauge">
+        <div class="ring">
+          <svg viewBox="0 0 100 100" aria-hidden="true">
+            <circle class="track" cx="50" cy="50" r="42"></circle>
+            {% if page.usage.context_fraction is not none %}
+              <circle class="fill" cx="50" cy="50" r="42"
+                      stroke-dasharray="{{ (page.usage.context_fraction * 264)|round(1) }} 264"></circle>
+            {% endif %}
+            {% if page.usage.recycle_fraction is not none %}
+              <circle class="mark" cx="50" cy="50" r="42"
+                      stroke-dasharray="3 261"
+                      stroke-dashoffset="{{ (-(page.usage.recycle_fraction * 264))|round(1) }}"></circle>
+            {% endif %}
+          </svg>
+          <div class="middle">
+            {% if page.usage.context_fraction is not none %}
+              {{ (page.usage.context_fraction * 100) | round | int }}%
+            {% else %}&mdash;{% endif %}
+          </div>
+        </div>
+        <div class="label">Context</div>
+        <div class="detail">
+          {% if page.usage.context_limit %}
+            {{ page.usage.context | tokens }} / {{ page.usage.context_limit | tokens }}
+          {% else %}
+            window unknown for {{ page.usage.model or "this model" }}
+          {% endif %}
+        </div>
+        {% if page.usage.recycle_note() %}
+          <div class="detail recycleat">{{ page.usage.recycle_note() }}</div>
+        {% endif %}
+      </div>
+    </div>
+    {# The refusal line stood here for twenty minutes. reported 2026-09-04:
+       The machinery
+       that read it out of the transcripts went with it -- a scan kept running
+       for a line nobody draws is the kind of cost that survives because it is
+       invisible. See `_quota_rejections` in the history of `today.py`. #}
+  </div>
+
+{# Full width now. The right-hand column held the meters and the three
+   quick buttons; the meters are in the bar above and the buttons are in
+   the rail, so the calendar has the row to itself and the agenda sits
+   beside the month rather than under it. #}
+  <div class="todaycal">
+  <h2 class="section">Calendar</h2>
+
+  <div class="calrow">
+    <div class="month">
+      {# Six months either way, and the arrow at the end is drawn spent rather
+         than removed — an arrow that vanishes reads as a bug, one that is
+         clearly out of road reads as an edge. #}
+      <div class="monthhead">
+        {% if previous_month %}
+          <a class="step" href="?m={{ previous_month }}" title="Previous month">&lsaquo;</a>
+        {% else %}<span class="step done">&lsaquo;</span>{% endif %}
+        <span class="mname">{{ month_name }}</span>
+        {% if next_month %}
+          <a class="step" href="?m={{ next_month }}" title="Next month">&rsaquo;</a>
+        {% else %}<span class="step done">&rsaquo;</span>{% endif %}
+      </div>
+      <table class="cal">
+        <thead><tr>
+          {% for day in ["M","T","W","T","F","S","S"] %}<th>{{ day }}</th>{% endfor %}
+        </tr></thead>
+        <tbody>
+          {% for week in weeks %}
+            <tr>
+              {% for day in week %}
+                {% if day %}
+                  <td class="{{ 'now' if day == today_date }} {{ 'picked' if day == picked_day }}">
+                    <a href="?m={{ month_key }}&amp;d={{ day.isoformat() }}">
+                      {{ day.day }}
+                      {% if day in busy_days %}<span class="pip"></span>{% endif %}
+                    </a>
+                  </td>
+                {% else %}
+                  <td class="blank"></td>
+                {% endif %}
+              {% endfor %}
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+      {% if month_key != today_date.strftime('%Y-%m') %}
+        <a class="backtoday" href="?">Back to today</a>
+      {% endif %}
+    </div>
+
+    <div class="agenda">
+      <div class="agendahead">{{ picked_day.strftime('%A %d %B') }}</div>
+      {% if page.calendar_problem %}
+        <p class="empty">{{ page.calendar_problem }}</p>
+      {% endif %}
+      {% for event in day_events %}
+        <div class="ev">
+          <span class="when">
+            {% if event.all_day %}all day{% else %}{{ event.start.strftime('%H:%M') }}{% endif %}
+          </span>
+          <span class="what">{{ event.summary }}</span>
+        </div>
+      {% else %}
+        {% if not page.calendar_problem %}
+          <p class="empty">Nothing on this day.</p>
+        {% endif %}
+      {% endfor %}
+    </div>
+  </div>
+  </div>
+
+{% if page.usage.last_24_hours %}
+  {% set peak = page.usage.last_24_hours | max %}
+  <div class="spark">
+    <svg viewBox="0 0 240 40" preserveAspectRatio="none" aria-hidden="true">
+      {% for value in page.usage.last_24_hours %}
+        {% set height = (value / peak * 34) if peak else 0 %}
+        <rect x="{{ loop.index0 * 10 + 1 }}" y="{{ 38 - height }}"
+              width="8" height="{{ height if height > 0.6 else 0.6 }}"
+              rx="1"></rect>
+      {% endfor %}
+    </svg>
+    <div class="sparkfoot">
+      <span>24 hours ago</span>
+      <span>
+        {# The money is what makes this legible: nobody knows what 4.8B tokens
+           means, and everybody knows what a number with a dollar sign means.
+           Said as "would have cost" because a subscription is not a bill. #}
+        tokens per hour &middot; you are on a subscription, so none of this is
+        billed to you
+      </span>
+      <span>now</span>
+    </div>
+  </div>
+{% endif %}
+
+{% if page.usage.problem %}
+  <div class="note">{{ page.usage.problem }}</div>
+{% endif %}
+
+{% include "_favourites.html" %}
+
+{# The queue bar and its sheet moved into base.html on 2026-09-04, so they
+   are on every page rather than on this one. #}
+
+</div>
+
+{% endblock %}

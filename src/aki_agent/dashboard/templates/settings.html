@@ -1,0 +1,315 @@
+{% extends "base.html" %}
+{% block heading %}You and Me{% endblock %}
+{% block body %}
+{% macro howto(topic) %}<a class="howto" href="{{ url_for('guide_page', topic=topic) }}" title="How to set this up">how do I set this up?</a>{% endmacro %}
+
+
+<p class="freshness">{{ config_path }}</p>
+
+{% for problem in problems %}<div class="note bad">{{ problem }}</div>{% endfor %}
+
+<div class="note">
+  Everything specific to you lives here rather than in the code. That is the
+  whole design &mdash; so this page is the one that makes the assistant yours
+  rather than a copy of somebody else's.
+</div>
+
+<form method="post" action="/settings/save">
+  <input type="hidden" name="token" value="{{ token }}">
+
+  <h2><span class="ico">&#9673;</span>Your assistant</h2>
+  <div class="card">
+    <div class="row">
+      <label>Name<input name="assistant_name" value="{{ config.assistant.name }}"></label>
+      <label>Mark (one or two characters, or an emoji)
+        <input name="assistant_logo" value="{{ config.assistant.logo }}" maxlength="4"></label>
+      <label>Colour<input name="assistant_colour" value="{{ config.assistant.colour }}"></label>
+    </div>
+    <label>How it should talk to you
+      <textarea name="assistant_tone" rows="2">{{ config.assistant.tone }}</textarea></label>
+    <p class="freshness">
+      The colour tints the whole interface, not just one button &mdash; there
+      is only one value to choose and no combination that can clash.
+    </p>
+  </div>
+
+  <h2><span class="ico">&#9678;</span>You</h2>
+  <div class="card">
+    <div class="row">
+      <label>Name<input name="user_name" value="{{ config.user.name }}"></label>
+      <label>Time zone<input name="user_timezone" value="{{ config.user.timezone }}"></label>
+      {# TWO WAYS, AND THE CHOICE IS VISIBLE.
+
+
+         One box used to take either a town name or a pair of coordinates,
+         which is tidy in the code and invisible in the interface: pressing
+         the button overwrote whatever town you had typed, with numbers, and
+         nothing said that had been a choice.
+
+         It is still ONE stored value -- a second key would be a second thing
+         to keep in step, and the mode can simply be read back off the value:
+         numbers mean the computer answered, words mean you typed it. #}
+      <div id="where" class="wherepick">
+        <span class="wherehead">Where you are</span>
+        <label class="pick">
+          <input type="radio" name="location_mode" value="town"
+                 {{ 'checked' if not located_here }}>
+          A town name
+        </label>
+        <label class="pick">
+          <input type="radio" name="location_mode" value="here"
+                 {{ 'checked' if located_here }}>
+          Where this computer is
+        </label>
+
+        <label class="wheretown">
+          <input name="user_location" id="user_location"
+                 value="{{ '' if located_here else config.user.location }}"
+                 placeholder="Winchester">
+          <span class="sub">For the weather on Today.</span>
+        </label>
+
+        <div class="wherehere">
+          <button type="button" id="findme" class="btn small">Use my location</button>
+          <span class="sub" id="findme_said">{{ config.user.location if located_here }}</span>
+          <input type="hidden" name="user_here" id="user_here"
+                 value="{{ config.user.location if located_here else '' }}">
+          {# Corrected 2026-09-05. This used to read "the answer goes no
+             further than this computer", which was true of the browser
+             prompt and false of everything after it: `today.py` sends the
+             coordinates to open-meteo for the forecast, and to bigdatacloud
+             to turn them into a town name. Somebody deciding whether to
+             press Allow is deciding exactly that. #}
+          <span class="sub">The browser asks you first. What you allow is
+          stored here and sent to a weather service to get the forecast for
+          that spot &mdash; type a town name instead if you would rather not
+          send coordinates.</span>
+        </div>
+      </div>
+      <label>Languages (comma separated, best first)
+        <input name="languages" value="{{ config.user.languages|join(', ') }}"></label>
+    </div>
+    <label>What you do
+      <input name="user_occupation" value="{{ config.user.occupation }}"></label>
+    {# Added 2026-09-05. `working_days`, `working_from` and `working_to` were
+       read by `User.is_working()`, `User.working_hours_sentence()` and the
+       CLAUDE.md the scaffold writes -- and set by nothing at all. No field
+       here, nothing in the setup interview, no CLI command: every install ran
+       on MON-FRI 09:00-17:30 unless somebody found the YAML. #}
+    <div class="row">
+      <label>Working days
+        <input name="working_days" value="{{ config.user.working_days|join(', ') }}"
+               placeholder="MON, TUE, WED, THU, FRI" autocomplete="off"></label>
+      <label>From
+        <input name="working_from" value="{{ config.user.working_from }}"
+               placeholder="09:00" autocomplete="off"></label>
+      <label>Until
+        <input name="working_to" value="{{ config.user.working_to }}"
+               placeholder="17:30" autocomplete="off"></label>
+    </div>
+    <p class="freshness">
+      Used to tell whether you are at work right now &mdash; Me time says so,
+      and your assistant is told in its own instructions. Leave the days empty
+      for every day.
+    </p>
+    <label>Everything your own notes call you (comma separated)
+      <input name="identity_aliases" value="{{ config.user.identity_aliases|join(', ') }}"></label>
+    <p class="freshness">
+      {# Corrected 2026-09-05. "matched exactly and never guessed" described
+         `User.owns()`, which has no production caller -- the aliases reach
+         behaviour only as a line written into CLAUDE.md for the assistant to
+         read. Describing an instruction to a model as a deterministic matcher
+         is the overstatement this file has been corrected for before. #}
+      That last one tells your assistant which work in your notes is yours.
+      It is written into its instructions, not matched by code, so give it the
+      forms people actually use rather than every possible spelling.
+    </p>
+  </div>
+
+  <h2><span class="ico">&#9636;</span>Your work</h2>
+  <div class="card">
+    <label>Folder<input name="workspace_root" value="{{ config.layout.root or '' }}"></label>
+    <div class="row">
+      <label>One of them is called
+        <input name="item_label" value="{{ config.layout.schema.item_label }}"></label>
+      <label>Several are called
+        <input name="item_label_plural" value="{{ config.layout.schema.item_label_plural }}"></label>
+      <label>Files in each folder (comma separated)
+        <input name="summary_files" value="{{ config.layout.schema.summary_files|join(', ') }}"></label>
+    </div>
+  </div>
+
+  <h2><span class="ico">&#9919;</span>Your PIN</h2> {{ howto('dashboard-pin') }}
+  <div class="card">
+    <p class="freshness" style="margin-top:0">
+      Asked for when you open the dashboard. It keeps other people who use this
+      computer out of your assistant &mdash; it does not encrypt anything, and
+      somebody with this machine can still open your files directly.
+    </p>
+    <div class="row">
+      <label>Current PIN
+        <input name="pin_now" type="password" inputmode="numeric"
+               autocomplete="current-password" pattern="[0-9]*" maxlength="8"></label>
+      <label>New PIN
+        <input name="pin_new" type="password" inputmode="numeric"
+               autocomplete="new-password" pattern="[0-9]*" maxlength="8"></label>
+    </div>
+    <p class="freshness">
+      {# Corrected 2026-09-05. `app.py` tries `send_to_phone` FIRST and only
+         writes the Desktop file when that fails, so with Telegram connected
+         nothing appears on the Desktop and the person goes looking for it. #}
+      Leave both empty to change nothing. Forgotten it? Sign out, and the login
+      page will set a new one and send it to your phone &mdash; or write it to
+      your Desktop if it cannot. Nothing here can read the old one back.
+    </p>
+  </div>
+
+  {# The Usage card stood here for one evening. It set the two figures the
+     five-hour and weekly rings measured against, and both rings were removed
+     on 2026-09-04 when it became clear neither could be filled honestly --
+     A settings card that configures
+     something no page draws is worse than no card: it reads as a feature that
+     is broken rather than one that was never possible. #}
+  <h2><span class="ico">&#9672;</span>Notifications</h2> {{ howto('telegram') }}
+  <div class="card">
+    <input type="hidden" name="notifications_present" value="1">
+    <label class="chip"><input type="checkbox" name="notifications_enabled"
+      {{ 'checked' if config.notifications.enabled }}> tell me things</label>
+    <div class="row">
+      <label>Quiet from
+        <input name="quiet_from" value="{{ config.notifications.quiet_hours[0] if config.notifications.quiet_hours else '' }}" placeholder="22:00"></label>
+      <label>Quiet until
+        <input name="quiet_to" value="{{ config.notifications.quiet_hours[1] if config.notifications.quiet_hours else '' }}" placeholder="07:00"></label>
+      <label>Words urgent enough to wake me
+        <input name="urgent_keywords" value="{{ config.notifications.urgent_keywords|join(', ') }}"></label>
+    </div>
+    <p class="freshness">
+      Nothing is ever dropped. Anything held while you are quiet arrives
+      afterwards as one summary, and being quiet stops the message, never the
+      work.
+    </p>
+  </div>
+
+  <button type="submit" class="primary">Save settings</button>
+</form>
+
+<h2><span class="ico">&#9635;</span>What to show about each {{ config.layout.schema.item_label|lower }}<span class="n">{{ config.layout.schema.fields|length }}</span></h2>
+<p class="sub">
+  These are the columns on your dashboard. Four to eight works well &mdash;
+  fewer says nothing, more and you will not keep them up to date.
+</p>
+
+{% if config.layout.schema.fields %}
+<table>
+  <thead><tr><th>Shows as</th><th>Kind</th><th>Allowed values</th><th></th></tr></thead>
+  <tbody>
+  {% for field in config.layout.schema.fields %}
+    <tr>
+      <td><b>{{ field.label }}</b><br><span class="blank">{{ field.key }}</span></td>
+      <td>{{ describe_type(field.type) }}</td>
+      <td class="blank">{{ field.values|join(', ') if field.values else '—' }}</td>
+      <td>
+        <form method="post" action="/settings/field/delete" class="inline">
+          <input type="hidden" name="token" value="{{ token }}">
+          <input type="hidden" name="key" value="{{ field.key }}">
+          <button type="submit" class="danger">Remove</button>
+        </form>
+      </td>
+    </tr>
+  {% endfor %}
+  </tbody>
+</table>
+{% else %}
+  <p class="empty">No fields yet.</p>
+{% endif %}
+
+<h2><span class="ico">&#43;</span>Add one</h2>
+<div class="card">
+  <form method="post" action="/settings/field">
+    <input type="hidden" name="token" value="{{ token }}">
+    <div class="row">
+      <label>Shows as<input name="label" placeholder="Next deadline"></label>
+      <label>Short name<input name="key" placeholder="next_deadline"></label>
+      <label>Kind
+        <select name="type">
+          {% for kind in field_types %}
+            <option value="{{ kind }}">{{ kind }} &mdash; {{ describe_type(kind) }}</option>
+          {% endfor %}
+        </select>
+      </label>
+    </div>
+    <label>Allowed values, if it is one of a fixed list (comma separated)
+      <input name="values" placeholder="planning, active, review, done"></label>
+    <button type="submit" class="primary">Add field</button>
+  </form>
+</div>
+
+{# The script has to live INSIDE the block.
+
+   Jinja renders nothing that sits outside a block in a template that
+   extends another, so a <script> placed after the block has been closed is dropped
+   without a word -- no error, no console message, just a button that does
+   nothing when pressed. Found by audit on 2026-08-23; three templates had
+   it. #}
+<script>
+/* "Use my location", asked of the browser and nobody else.
+
+   The browser is the only party here that knows where the machine is, and it
+   will not say without asking the person first -- which is the right shape
+   for this: no third-party lookup service, no IP address sent anywhere, and
+   a refusal that costs nothing because the box beside it still takes a town
+   name.
+
+   What comes back is a latitude and longitude, and that is what goes in the
+   field. The weather accepts either form. */
+(function () {
+  var button = document.getElementById('findme');
+  var said = document.getElementById('findme_said');
+  var stored = document.getElementById('user_here');
+  var picks = document.querySelectorAll('input[name="location_mode"]');
+  var block = document.querySelector('.wherepick');
+  if (!button || !stored || !block) { return; }
+
+  /* Which half is live follows the radio, so the one that is not chosen
+     cannot be edited by accident and then silently ignored on save. */
+  function showChoice() {
+    var here = document.querySelector(
+      'input[name="location_mode"][value="here"]').checked;
+    block.classList.toggle('is-here', here);
+  }
+  picks.forEach(function (one) { one.addEventListener('change', showChoice); });
+  showChoice();
+
+  if (!navigator.geolocation) {
+    button.disabled = true;
+    button.title = 'This browser cannot report a location';
+    return;
+  }
+
+  button.addEventListener('click', function () {
+    said.textContent = 'asking…';
+    navigator.geolocation.getCurrentPosition(function (spot) {
+      var where = spot.coords.latitude.toFixed(4) + ', '
+                + spot.coords.longitude.toFixed(4);
+      stored.value = where;
+      said.textContent = where + ' — saving…';
+
+      /* SAVED, not just filled in. and that is exactly
+         what happened. The button put the coordinates in the box and left a
+         small "now save" beside itself; he read a button that had done its
+         job, went to look at the weather, and nothing had been written.
+
+         A control that looks like an action has to be one. */
+      var form = button.closest('form');
+      if (form) { form.submit(); }
+    }, function (problem) {
+      /* Refused, or unavailable. Neither is a failure worth alarming
+         somebody over: the other half of this still takes a town name. */
+      said.textContent = (problem && problem.code === 1)
+        ? 'you said no — use a town name instead'
+        : 'could not tell — use a town name instead';
+    }, { timeout: 10000, maximumAge: 600000 });
+  });
+})();
+</script>
+{% endblock %}

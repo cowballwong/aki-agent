@@ -1,0 +1,255 @@
+{#
+  TWO SECTIONS, IN THIS ORDER, ON PURPOSE.
+
+  "What can I actually do" comes first, because that is the question a user
+  opens this page with. The list of services is the machinery underneath it and
+  is second. A page that opens with a table of vendors makes the user work out
+  the answer themselves.
+#}
+
+<div class="note">
+  Optional. Everything else in here works without a single key &mdash; these are
+  for outside services you already pay for. Keys go into this computer's
+  credential store, are never written into your settings file, and are never
+  shown back to you or sent to your browser.
+</div>
+
+{% if fallback_warning %}<div class="note bad">{{ fallback_warning }}</div>{% endif %}
+{% if note %}<div class="note">{{ note }}</div>{% endif %}
+{% for problem in problems %}<div class="note bad">{{ problem }}</div>{% endfor %}
+
+<h2><span class="ico">&#9670;</span>What I can do with them</h2>
+<div class="card">
+  <p class="sub">
+    One job, one service. Where two could do it, the top one in the list below
+    is used &mdash; and you can change which that is.
+  </p>
+  <table>
+    <thead><tr><th>Job</th><th>Uses</th><th>Also able</th><th></th></tr></thead>
+    <tbody>
+    {% for row in overview %}
+      <tr>
+        <td>{{ row.label }}<div class="sub">{{ row.help }}</div></td>
+        <td>
+          {% if row.chosen %}<span class="badge ok">{{ row.chosen }}</span>
+          {% else %}<span class="badge bad">nothing</span>{% endif %}
+        </td>
+        <td class="blank">
+          {% for other in row.others %}{{ other.name }}{% if not loop.last %}, {% endif %}{% endfor %}
+          {% if not row.others %}&mdash;{% endif %}
+        </td>
+        <td>
+          {# The only precedence control there is: promote a service to the top.
+             Shown per job but acting on the whole list, and said so, because a
+             button that silently changes another job's answer too is a button
+             that surprises somebody. #}
+          {% for other in row.others %}
+            <form method="post" action="/tools/prefer" class="inline">
+              <input type="hidden" name="token" value="{{ token }}">
+              <input type="hidden" name="tool" value="{{ other.tool }}">
+              <button type="submit" title="Move {{ other.name }} to the top of the list, for every job it does">Use {{ other.name }}</button>
+            </form>
+          {% endfor %}
+        </td>
+      </tr>
+      {% if row.waiting_for_key %}
+        <tr>
+          <td colspan="4" class="sub">
+            Chosen for this but no key saved yet:
+            {% for name in row.waiting_for_key %}<b>{{ name }}</b>{% if not loop.last %}, {% endif %}{% endfor %}
+            &mdash; so it cannot be used.
+          </td>
+        </tr>
+      {% endif %}
+    {% endfor %}
+    </tbody>
+  </table>
+</div>
+
+<h2><span class="ico">&#9906;</span>Services you have set up</h2>
+<div class="card">
+  {% if saved %}
+    {% for row in saved %}
+      <div class="tool">
+        <div class="row">
+          <div><b>{{ row.name }}</b>
+            {% if not row.known %}<span class="badge warn">your own</span>{% endif %}
+          </div>
+          <div>Key:
+            {% if row.has_key %}<span class="badge ok">saved</span>
+            {% else %}<span class="badge bad">none</span>{% endif %}
+          </div>
+          <div>{% if row.enabled %}<span class="badge ok">on</span>
+               {% else %}<span class="badge warn">off</span>{% endif %}</div>
+          <div class="blank">{{ row.env_name }}</div>
+        </div>
+
+        <form method="post" action="/tools/save">
+          <input type="hidden" name="token" value="{{ token }}">
+          <input type="hidden" name="tool" value="{{ row.tool }}">
+
+          <div class="sub">Used for &mdash; tick what this one is allowed to do:</div>
+          <div class="row">
+          {% for job in jobs %}
+            {% if job.key in row.available_jobs %}
+              <label class="tick"><input type="checkbox" name="jobs" value="{{ job.key }}"
+                {% if job.key in row.jobs %}checked{% endif %}> {{ job.label }}</label>
+            {% endif %}
+          {% endfor %}
+          </div>
+
+          <label>{% if row.has_key %}Replace the key{% else %}Key{% endif %}
+            <input type="password" name="api_key" autocomplete="new-password"
+                   placeholder="{% if row.has_key %}leave blank to keep the one saved{% else %}paste it here{% endif %}">
+          </label>
+          <input type="hidden" name="enabled_present" value="1">
+          <label class="tick"><input type="checkbox" name="enabled"
+            {% if row.enabled %}checked{% endif %}> Switched on</label>
+          <button type="submit" class="primary">Save</button>
+        </form>
+
+        <form method="post" action="/tools/remove" class="inline">
+          <input type="hidden" name="token" value="{{ token }}">
+          <input type="hidden" name="tool" value="{{ row.tool }}">
+          <button type="submit">Remove, and delete the key</button>
+        </form>
+
+        {% if row.key_url %}
+          <p class="freshness">Keys come from: <span class="blank">{{ row.key_url }}</span></p>
+        {% endif %}
+      </div>
+    {% endfor %}
+  {% else %}
+    <p class="empty">None yet. Nothing is broken &mdash; this is the normal state.</p>
+  {% endif %}
+</div>
+
+<h2><span class="ico">&#10011;</span>Add a service</h2>
+<div class="card">
+  <p class="sub">
+    Pick one and paste its key. Ticking what it is for is separate from having
+    the key, because a key is not permission &mdash; nothing is used for a job
+    you did not tick.
+  </p>
+
+  <form method="post" action="/tools/save">
+    <input type="hidden" name="token" value="{{ token }}">
+
+    <label>Service
+      <select name="tool" id="tool-picker">
+        <option value="">-- choose --</option>
+        {% for item in unused %}
+          <option value="{{ item.key }}"
+                  data-jobs="{{ item.jobs|join(',') }}">{{ item.name }}</option>
+        {% endfor %}
+      </select>
+    </label>
+
+    <label>Key
+      <input type="password" name="api_key" autocomplete="new-password">
+      <span class="sub">Goes to this computer's credential store. Not into any
+      file here, and never shown back to you.</span>
+    </label>
+
+    <div class="sub">Used for:</div>
+    <div class="row" id="job-ticks">
+    {% for job in jobs %}
+      <label class="tick" data-job="{{ job.key }}">
+        <input type="checkbox" name="jobs" value="{{ job.key }}"> {{ job.label }}
+      </label>
+    {% endfor %}
+    </div>
+
+    <button type="submit" class="primary">Add</button>
+  </form>
+
+  <details>
+    <summary>A service that is not on the list</summary>
+    <form method="post" action="/tools/save">
+      <input type="hidden" name="token" value="{{ token }}">
+      <label>Name it <input type="text" name="custom_tool" placeholder="my-image-service"></label>
+      <label>Key <input type="password" name="api_key" autocomplete="new-password"></label>
+      <div class="sub">Used for:</div>
+      <div class="row">
+      {% for job in jobs %}
+        <label class="tick"><input type="checkbox" name="jobs" value="{{ job.key }}"> {{ job.label }}</label>
+      {% endfor %}
+      </div>
+      <button type="submit">Add it</button>
+    </form>
+  </details>
+</div>
+
+<h2><span class="ico">&#9635;</span>What each service can do</h2>
+<div class="card">
+  <p class="sub">
+    For choosing where to open an account. No prices here on purpose &mdash;
+    they change monthly, and a stale number on a dashboard gets believed.
+  </p>
+  <table>
+    <thead><tr><th>Service</th><th>Can do</th><th>Keys from</th></tr></thead>
+    <tbody>
+    {% for item in catalogue %}
+      <tr>
+        <td><b>{{ item.name }}</b>{% if item.note %}<div class="sub">{{ item.note }}</div>{% endif %}</td>
+        <td class="sub">
+          {% for job_key in item.jobs %}{{ job_labels[job_key] }}{% if not loop.last %}, {% endif %}{% endfor %}
+        </td>
+        <td class="blank">{{ item.key_url }}</td>
+      </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+</div>
+
+<h2><span class="ico">&#9673;</span>Where the keys are kept</h2>
+<div class="card">
+  {% if using_os_store %}
+    <p>Your operating system's password manager, under names starting
+      <span class="blank">api:</span> &mdash; so you can find and delete them
+      by hand without this software. <span class="badge ok">good</span></p>
+  {% else %}
+    <p><span class="badge bad">no password manager found</span> &mdash; keys
+      fall back to a file in your own folder. Worth fixing before you paste a
+      paid key in.</p>
+  {% endif %}
+</div>
+
+<style>
+  /* Scoped to this page. The tick layout is the only thing here the shared
+     stylesheet had no shape for. */
+  .tick { display: flex; align-items: center; gap: 0.35rem; flex: 0 1 auto;
+          font: 11px/1.6 var(--sans); text-transform: none; letter-spacing: 0; }
+  .tick input { width: auto; margin: 0; display: inline-block; }
+  .tick.hidden { display: none; }
+  .tool { padding: 0.7rem 0; border-bottom: 1px solid var(--border); }
+  .tool:last-child { border-bottom: 0; }
+  form.inline { display: inline-block; margin: 0 0.35rem 0.35rem 0; }
+</style>
+
+<script>
+  // Shows only the jobs the chosen service can actually do.
+  //
+  // A convenience, never the check. The server rejects a job the service
+  // cannot do and says so in words, because a form posted with JavaScript off
+  // -- or by anything other than this page -- must not be able to save a
+  // setting that silently fails later.
+  (function () {
+    var picker = document.getElementById('tool-picker');
+    var ticks = document.getElementById('job-ticks');
+    if (!picker || !ticks) return;
+
+    function refresh() {
+      var option = picker.options[picker.selectedIndex];
+      var able = (option && option.dataset.jobs || '').split(',');
+      Array.prototype.forEach.call(ticks.children, function (label) {
+        var fits = !picker.value || able.indexOf(label.dataset.job) !== -1;
+        label.classList.toggle('hidden', !fits);
+        if (!fits) label.querySelector('input').checked = false;
+      });
+    }
+
+    picker.addEventListener('change', refresh);
+    refresh();
+  })();
+</script>

@@ -1,0 +1,956 @@
+[
+ {
+  "endpoint": "today_page",
+  "methods": [
+   "GET"
+  ],
+  "rule": "/"
+ },
+ {
+  "endpoint": "activity",
+  "methods": [
+   "GET"
+  ],
+  "rule": "/activity"
+ },
+ {
+  "endpoint": "api_events",
+  "methods": [
+   "GET"
+  ],
+  "rule": "/api/events"
+ },
+ {
+  "endpoint": "api_items",
+  "methods": [
+   "GET"
+  ],
+  "rule": "/api/items"
+ },
+ {
+  "endpoint": "api_mobile_answer",
+  "methods": [
+   "POST"
+  ],
+  "rule": "/api/mobile/answer"
+ },
+ {
+  "endpoint": "api_mobile_pages",
+  "methods": [
+   "GET"
+  ],
+  "rule": "/api/mobile/pages"
+ },
+ {
+  "endpoint": "api_mobile_reply",
+  "methods": [
+   "POST"
+  ],
+  "rule": "/api/mobile/reply"
+ },
+ {
+  "endpoint": "api_mobile_summary",
+  "methods": [
+   "GET"
+  ],
+  "rule": "/api/mobile/summary"
+ },
+ {
+  "endpoint": "api_mobile_waiting",
+  "methods": [
+   "GET"
+  ],
+  "rule": "/api/mobile/waiting"
+ },
+ {
+  "endpoint": "api_session_steps",
+  "methods": [
+   "GET"
+  ],
+  "rule": "/api/session/steps"
+ },
+ {
+  "endpoint": "clones_list",
+  "methods": [
+   "GET"
+  ],
+  "rule": "/clones"
+ },
+ {
+  "endpoint": "clones_add",
+  "methods": [
+   "POST"
+  ],
+  "rule": "/clones/add"
+ },
+ {
+  "endpoint": "clones_remove",
+  "methods": [
+   "POST"
+  ],
+  "rule": "/clones/remove"
+ },
+ {
+  "endpoint": "connections",
+  "methods": [
+   "GET"
+  ],
+  "rule": "/connections"
+ },
+ {
+  "endpoint": "connections_calendar",
+  "methods": [
+   "POST"
+  ],
+  "rule": "/connections/calendar"
+ },
+ {
+  "endpoint": "connections_calendar_forget",
+  "methods": [
+   "POST"
+  ],
+  "rule": "/connections/calendar/forget"
+ },
+ {
+  "endpoint": "connections_google_callback",
+  "methods": [
+   "GET"
+  ],
+  "rule": "/connections/google/callback"
+ },
+ {
+  "endpoint": "connections_google_connect",
+  "methods": [
+   "POST"
+  ],
+  "rule": "/connections/google/connect"
+ },
+ {
+  "endpoint": "connections_google_credentials",
+  "methods": [
+   "POST"
+  ],
+  "rule": "/connections/google/credentials"
+ },
+ {
+  "endpoint": "connections_google_disconnect",
+  "methods": [
+   "POST"
+  ],
+  "rule": "/connections/google/disconnect"
+ },
+ {
+  "endpoint": "connections_mail",
+  "methods": [
+   "POST"
+  ],
+  "rule": "/connections/mail"
+ },
+ {
+  "endpoint": "connections_mail_forget",
+  "methods": [
+   "POST"
+  ],
+  "rule": "/connections/mail/forget"
+ },
+ {
+  "endpoint": "connections_telegram",
+  "methods": [
+   "POST"
+  ],
+  "rule": "/connections/telegram"
+ },
+ {
+  "endpoint": "events_page",
+  "methods": [
+   "GET"
+  ],
+  "rule": "/events"
+ },
+ {
+  "endpoint": "first_pin",
+  "methods": [
+   "GET",
+   "POST"
+  ],
+  "rule": "/first-pin"
+ },
+ {
+  "endpoint": "guide_page",
+  "methods": [
+   "GET"
+  ],
+  "rule": "/guide/<topic>"
+ },
+ {
+  "endpoint": "guides_index",
+  "methods": [
+   "GET"
+  ],
+  "rule": "/guides"
+ },
+ {
+  "endpoint": "health",
+  "methods": [
+   "GET"
+  ],
+  "rule": "/health"
+ },
+ {
+  "endpoint": "health_repair",
+  "methods": [
+   "POST"
+  ],
+  "rule": "/health/repair"
+ },
+ {
+  "endpoint": "history_page",
+  "methods": [
+   "GET"
+  ],
+  "rule": "/history"
+ },
+ {
+  "endpoint": "inbox_page",
+  "methods": [
+   "GET"
+  ],
+  "rule": "/inbox"
+ },
+ {
+  "endpoint": "item_detail",
+  "methods": [
+   "GET"
+  ],
+  "rule": "/item/<path:key>"
+ },
+ {
+  "endpoint": "item_new",
+  "methods": [
+   "POST"
+  ],
+  "rule": "/item/new"
+ },
+ {
+  "endpoint": "item_refresh",
+  "methods": [
+   "POST"
+  ],
+  "rule": "/item/refresh"
+ },
+ {
+  "endpoint": "item_remove",
+  "methods": [
+   "POST"
+  ],
+  "rule": "/item/remove"
+ },
+ {
+  "endpoint": "item_rename",
+  "methods": [
+   "POST"
+  ],
+  "rule": "/item/rename"
+ },
+ {
+  "endpoint": "keys_page",
+  "methods": [
+   "GET"
+  ],
+  "rule": "/keys"
+ },
+ {
+  "endpoint": "_knowledge_page",
+  "methods": [
+   "GET"
+  ],
+  "rule": "/knowledge"
+ },
+ {
+  "endpoint": "knowledge_add",
+  "methods": [
+   "POST"
+  ],
+  "rule": "/knowledge/add"
+ },
+ {
+  "endpoint": "knowledge_delete",
+  "methods": [
+   "POST"
+  ],
+  "rule": "/knowledge/delete"
+ },
+ {
+  "endpoint": "knowledge_files",
+  "methods": [
+   "POST"
+  ],
+  "rule": "/knowledge/files"
+ },
+ {
+  "endpoint": "knowledge_files_native",
+  "methods": [
+   "POST"
+  ],
+  "rule": "/knowledge/files/native"
+ },
+ {
+  "endpoint": "learned",
+  "methods": [
+   "GET"
+  ],
+  "rule": "/learned"
+ },
+ {
+  "endpoint": "library_page",
+  "methods": [
+   "GET"
+  ],
+  "rule": "/library"
+ },
+ {
+  "endpoint": "library_item",
+  "methods": [
+   "GET"
+  ],
+  "rule": "/library/<key>"
+ },
+ {
+  "endpoint": "library_fork",
+  "methods": [
+   "POST"
+  ],
+  "rule": "/library/fork"
+ },
+ {
+  "endpoint": "library_toggle",
+  "methods": [
+   "POST"
+  ],
+  "rule": "/library/toggle"
+ },
+ {
+  "endpoint": "login",
+  "methods": [
+   "GET",
+   "POST"
+  ],
+  "rule": "/login"
+ },
+ {
+  "endpoint": "forgot_pin",
+  "methods": [
+   "POST"
+  ],
+  "rule": "/login/forgot"
+ },
+ {
+  "endpoint": "logout",
+  "methods": [
+   "POST"
+  ],
+  "rule": "/logout"
+ },
+ {
+  "endpoint": "logs",
+  "methods": [
+   "GET"
+  ],
+  "rule": "/logs"
+ },
+ {
+  "endpoint": "web_manifest",
+  "methods": [
+   "GET"
+  ],
+  "rule": "/manifest.webmanifest"
+ },
+ {
+  "endpoint": "mcp_page",
+  "methods": [
+   "GET"
+  ],
+  "rule": "/mcp"
+ },
+ {
+  "endpoint": "mcp_add",
+  "methods": [
+   "POST"
+  ],
+  "rule": "/mcp/add"
+ },
+ {
+  "endpoint": "mcp_remove",
+  "methods": [
+   "POST"
+  ],
+  "rule": "/mcp/remove"
+ },
+ {
+  "endpoint": "history_page",
+  "methods": [
+   "GET"
+  ],
+  "rule": "/memory"
+ },
+ {
+  "endpoint": "memory_dreaming",
+  "methods": [
+   "POST"
+  ],
+  "rule": "/memory/dreaming"
+ },
+ {
+  "endpoint": "memory_meaning",
+  "methods": [
+   "POST"
+  ],
+  "rule": "/memory/meaning"
+ },
+ {
+  "endpoint": "memory_optimise",
+  "methods": [
+   "POST"
+  ],
+  "rule": "/memory/optimise"
+ },
+ {
+  "endpoint": "memory_vectors",
+  "methods": [
+   "POST"
+  ],
+  "rule": "/memory/vectors"
+ },
+ {
+  "endpoint": "notifications",
+  "methods": [
+   "GET"
+  ],
+  "rule": "/notifications"
+ },
+ {
+  "endpoint": "notifications_assign",
+  "methods": [
+   "POST"
+  ],
+  "rule": "/notifications/assign"
+ },
+ {
+  "endpoint": "notifications_channel",
+  "methods": [
+   "POST"
+  ],
+  "rule": "/notifications/channel"
+ },
+ {
+  "endpoint": "notifications_clear",
+  "methods": [
+   "POST"
+  ],
+  "rule": "/notifications/clear"
+ },
+ {
+  "endpoint": "notifications_mode",
+  "methods": [
+   "POST"
+  ],
+  "rule": "/notifications/mode"
+ },
+ {
+  "endpoint": "notifications_mode_delete",
+  "methods": [
+   "POST"
+  ],
+  "rule": "/notifications/mode/delete"
+ },
+ {
+  "endpoint": "notifications_quiet",
+  "methods": [
+   "POST"
+  ],
+  "rule": "/notifications/quiet"
+ },
+ {
+  "endpoint": "notifications_release",
+  "methods": [
+   "POST"
+  ],
+  "rule": "/notifications/release"
+ },
+ {
+  "endpoint": "plugins_check",
+  "methods": [
+   "POST"
+  ],
+  "rule": "/plugins/check"
+ },
+ {
+  "endpoint": "plugins_install",
+  "methods": [
+   "POST"
+  ],
+  "rule": "/plugins/install"
+ },
+ {
+  "endpoint": "plugins_remove",
+  "methods": [
+   "POST"
+  ],
+  "rule": "/plugins/remove"
+ },
+ {
+  "endpoint": "index",
+  "methods": [
+   "GET"
+  ],
+  "rule": "/projects"
+ },
+ {
+  "endpoint": "projects_arrange",
+  "methods": [
+   "POST"
+  ],
+  "rule": "/projects/arrange"
+ },
+ {
+  "endpoint": "projects_pin",
+  "methods": [
+   "POST"
+  ],
+  "rule": "/projects/pin"
+ },
+ {
+  "endpoint": "push_key",
+  "methods": [
+   "GET"
+  ],
+  "rule": "/push/key"
+ },
+ {
+  "endpoint": "push_subscribe",
+  "methods": [
+   "POST"
+  ],
+  "rule": "/push/subscribe"
+ },
+ {
+  "endpoint": "push_test",
+  "methods": [
+   "POST"
+  ],
+  "rule": "/push/test"
+ },
+ {
+  "endpoint": "push_unsubscribe",
+  "methods": [
+   "POST"
+  ],
+  "rule": "/push/unsubscribe"
+ },
+ {
+  "endpoint": "queues_seen",
+  "methods": [
+   "POST"
+  ],
+  "rule": "/queues/seen"
+ },
+ {
+  "endpoint": "remote_access",
+  "methods": [
+   "POST"
+  ],
+  "rule": "/remote"
+ },
+ {
+  "endpoint": "rules_page",
+  "methods": [
+   "GET"
+  ],
+  "rule": "/rules"
+ },
+ {
+  "endpoint": "rules_add",
+  "methods": [
+   "POST"
+  ],
+  "rule": "/rules/add"
+ },
+ {
+  "endpoint": "rules_remove",
+  "methods": [
+   "POST"
+  ],
+  "rule": "/rules/remove"
+ },
+ {
+  "endpoint": "running_page",
+  "methods": [
+   "GET"
+  ],
+  "rule": "/running"
+ },
+ {
+  "endpoint": "safety_page",
+  "methods": [
+   "GET"
+  ],
+  "rule": "/safety"
+ },
+ {
+  "endpoint": "scheduled",
+  "methods": [
+   "GET"
+  ],
+  "rule": "/schedule"
+ },
+ {
+  "endpoint": "schedule_delete",
+  "methods": [
+   "POST"
+  ],
+  "rule": "/schedule/delete"
+ },
+ {
+  "endpoint": "schedule_folders",
+  "methods": [
+   "POST"
+  ],
+  "rule": "/schedule/folders"
+ },
+ {
+  "endpoint": "schedule_folders_native",
+  "methods": [
+   "POST"
+  ],
+  "rule": "/schedule/folders/native"
+ },
+ {
+  "endpoint": "schedule_install",
+  "methods": [
+   "POST"
+  ],
+  "rule": "/schedule/install"
+ },
+ {
+  "endpoint": "schedule_remove",
+  "methods": [
+   "POST"
+  ],
+  "rule": "/schedule/remove"
+ },
+ {
+  "endpoint": "schedule_save",
+  "methods": [
+   "POST"
+  ],
+  "rule": "/schedule/save"
+ },
+ {
+  "endpoint": "sessions",
+  "methods": [
+   "GET"
+  ],
+  "rule": "/sessions"
+ },
+ {
+  "endpoint": "sessions_checkpoint",
+  "methods": [
+   "POST"
+  ],
+  "rule": "/sessions/checkpoint"
+ },
+ {
+  "endpoint": "sessions_recycle_now",
+  "methods": [
+   "POST"
+  ],
+  "rule": "/sessions/recycle-now"
+ },
+ {
+  "endpoint": "sessions_recycling",
+  "methods": [
+   "POST"
+  ],
+  "rule": "/sessions/recycling"
+ },
+ {
+  "endpoint": "settings_page",
+  "methods": [
+   "GET"
+  ],
+  "rule": "/settings"
+ },
+ {
+  "endpoint": "settings_field",
+  "methods": [
+   "POST"
+  ],
+  "rule": "/settings/field"
+ },
+ {
+  "endpoint": "settings_field_delete",
+  "methods": [
+   "POST"
+  ],
+  "rule": "/settings/field/delete"
+ },
+ {
+  "endpoint": "settings_save",
+  "methods": [
+   "POST"
+  ],
+  "rule": "/settings/save"
+ },
+ {
+  "endpoint": "shutdown",
+  "methods": [
+   "POST"
+  ],
+  "rule": "/shutdown"
+ },
+ {
+  "endpoint": "skills",
+  "methods": [
+   "GET"
+  ],
+  "rule": "/skills"
+ },
+ {
+  "endpoint": "skills_delete",
+  "methods": [
+   "POST"
+  ],
+  "rule": "/skills/delete"
+ },
+ {
+  "endpoint": "skills_save",
+  "methods": [
+   "POST"
+  ],
+  "rule": "/skills/save"
+ },
+ {
+  "endpoint": "specialists_page",
+  "methods": [
+   "GET"
+  ],
+  "rule": "/specialists"
+ },
+ {
+  "endpoint": "specialists_delete",
+  "methods": [
+   "POST"
+  ],
+  "rule": "/specialists/delete"
+ },
+ {
+  "endpoint": "specialists_save",
+  "methods": [
+   "POST"
+  ],
+  "rule": "/specialists/save"
+ },
+ {
+  "endpoint": "specialists_sentinel",
+  "methods": [
+   "POST"
+  ],
+  "rule": "/specialists/sentinel"
+ },
+ {
+  "endpoint": "static",
+  "methods": [
+   "GET"
+  ],
+  "rule": "/static/<path:filename>"
+ },
+ {
+  "endpoint": "service_worker",
+  "methods": [
+   "GET"
+  ],
+  "rule": "/sw.js"
+ },
+ {
+  "endpoint": "theme_page",
+  "methods": [
+   "GET"
+  ],
+  "rule": "/theme"
+ },
+ {
+  "endpoint": "theme_choose",
+  "methods": [
+   "POST"
+  ],
+  "rule": "/theme/choose"
+ },
+ {
+  "endpoint": "today_eod",
+  "methods": [
+   "POST"
+  ],
+  "rule": "/today/eod"
+ },
+ {
+  "endpoint": "today_me_time",
+  "methods": [
+   "POST"
+  ],
+  "rule": "/today/me-time"
+ },
+ {
+  "endpoint": "tools_page",
+  "methods": [
+   "GET"
+  ],
+  "rule": "/tools"
+ },
+ {
+  "endpoint": "tools_prefer",
+  "methods": [
+   "POST"
+  ],
+  "rule": "/tools/prefer"
+ },
+ {
+  "endpoint": "tools_remove",
+  "methods": [
+   "POST"
+  ],
+  "rule": "/tools/remove"
+ },
+ {
+  "endpoint": "tools_save",
+  "methods": [
+   "POST"
+  ],
+  "rule": "/tools/save"
+ },
+ {
+  "endpoint": "update_now",
+  "methods": [
+   "POST"
+  ],
+  "rule": "/update"
+ },
+ {
+  "endpoint": "waiting_page",
+  "methods": [
+   "GET"
+  ],
+  "rule": "/waiting"
+ },
+ {
+  "endpoint": "waiting_answer",
+  "methods": [
+   "POST"
+  ],
+  "rule": "/waiting/<item_id>/<option_key>"
+ },
+ {
+  "endpoint": "waiting_dismiss",
+  "methods": [
+   "POST"
+  ],
+  "rule": "/waiting/<item_id>/dismiss"
+ },
+ {
+  "endpoint": "waiting_reply",
+  "methods": [
+   "POST"
+  ],
+  "rule": "/waiting/<item_id>/reply"
+ },
+ {
+  "endpoint": "watching_page",
+  "methods": [
+   "GET"
+  ],
+  "rule": "/watching"
+ },
+ {
+  "endpoint": "workflows_page",
+  "methods": [
+   "GET"
+  ],
+  "rule": "/workflows"
+ },
+ {
+  "endpoint": "workflows_add",
+  "methods": [
+   "POST"
+  ],
+  "rule": "/workflows/add"
+ },
+ {
+  "endpoint": "workflows_check",
+  "methods": [
+   "POST"
+  ],
+  "rule": "/workflows/check"
+ },
+ {
+  "endpoint": "workflows_remove",
+  "methods": [
+   "POST"
+  ],
+  "rule": "/workflows/remove"
+ },
+ {
+  "endpoint": "workflows_run",
+  "methods": [
+   "POST"
+  ],
+  "rule": "/workflows/run"
+ },
+ {
+  "endpoint": "workflows_switch",
+  "methods": [
+   "POST"
+  ],
+  "rule": "/workflows/switch"
+ },
+ {
+  "endpoint": "workspace_detail",
+  "methods": [
+   "GET"
+  ],
+  "rule": "/workspace/<path:name>"
+ },
+ {
+  "endpoint": "workspace_new",
+  "methods": [
+   "POST"
+  ],
+  "rule": "/workspace/new"
+ },
+ {
+  "endpoint": "workspace_refresh",
+  "methods": [
+   "POST"
+  ],
+  "rule": "/workspace/refresh"
+ },
+ {
+  "endpoint": "workspace_remove",
+  "methods": [
+   "POST"
+  ],
+  "rule": "/workspace/remove"
+ },
+ {
+  "endpoint": "workspace_rename",
+  "methods": [
+   "POST"
+  ],
+  "rule": "/workspace/rename"
+ },
+ {
+  "endpoint": "yours_page",
+  "methods": [
+   "GET"
+  ],
+  "rule": "/yours"
+ }
+]

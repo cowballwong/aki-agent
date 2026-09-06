@@ -1,0 +1,81 @@
+{# One row in a raised queue.
+
+
+
+   The id is there to be quoted somewhere else — in a message, a ticket, a
+   note — which is why it has a copy button rather than being something to
+   read off the screen. #}
+<div class="queuerow">
+  <div class="queueline">
+    <button type="button" class="queueid" data-copy="{{ one.id }}"
+            title="Copy {{ one.id }}">{{ one.id }}</button>
+
+    <button type="button" class="queuetop">
+      <b>{{ one.title }}</b>
+    </button>
+
+    <span class="queuemeta">
+      {% if one.waiting_on %}
+        <span class="queuewho" title="Waiting on">{{ one.waiting_on }}</span>
+      {% endif %}
+      {% if one.project %}<span class="queueproj">{{ one.project }}</span>{% endif %}
+      {% if one.due %}
+        {# Late is worth saying out loud, and it is the only state here that
+           changes what somebody does today. #}
+        <span class="queuedue{{ ' late' if one.due < today_iso }}">{{ one.due }}</span>
+      {% endif %}
+    </span>
+
+    <button type="button" class="queueexpand" aria-label="Show detail">&plus;</button>
+  </div>
+
+  <div class="queuedetail" hidden>
+    {% if one.body %}<p class="queuefull">{{ one.body }}</p>{% endif %}
+
+    {# What the draft checker made of it, beside the decision it is for.
+
+       The switch that turns this on has claimed since it was written that
+       "drafts are looked at before they are shown", and until 2026-08-23
+       nothing consulted it — `sentinel.is_on()` was read in four places and
+       every one was a label. A verdict shown on some other page would have
+       been the same mistake one step along: the only moment it is worth
+       anything is the moment somebody is deciding whether to send. #}
+    {% if one.checked %}
+      <p class="checked">{{ one.checked }}</p>
+    {% endif %}
+
+    {% if one.options %}
+      <div class="queueoptions">
+        {% for option in one.options %}
+          <form method="post"
+                action="/waiting/{{ one.id | urlencode }}/{{ option.key | urlencode }}">
+            <input type="hidden" name="token" value="{{ token }}">
+            <input type="hidden" name="back" value="/">
+            <button type="submit" class="quick">{{ option.label }}</button>
+          </form>
+        {% endfor %}
+      </div>
+    {% endif %}
+
+    <form method="post" action="/waiting/{{ one.id | urlencode }}/reply"
+          class="queuereply">
+      <input type="hidden" name="token" value="{{ token }}">
+      <input type="hidden" name="back" value="/">
+      <textarea name="text" rows="2"
+                placeholder="{{ 'Note what they said…' if one.kind == 'waiting'
+                                else 'Answer in your own words…' }}"></textarea>
+      <div class="queuerowbuttons">
+        <button type="submit" class="quick primary">
+          {{ 'Record a reply' if one.kind == 'waiting' else 'Reply' }}</button>
+      </div>
+    </form>
+
+    <form method="post" action="/waiting/{{ one.id | urlencode }}/dismiss"
+          class="queuedismiss">
+      <input type="hidden" name="token" value="{{ token }}">
+      <input type="hidden" name="back" value="/">
+      <button type="submit" class="quick">
+        {{ 'No longer waiting' if one.kind == 'waiting' else 'Dismiss' }}</button>
+    </form>
+  </div>
+</div>

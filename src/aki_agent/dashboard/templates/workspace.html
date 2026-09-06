@@ -1,0 +1,34 @@
+{% extends "base.html" %}
+{% block heading %}{{ name }}{% endblock %}
+{# `/` is Today. The list of workspaces is `/projects`, so this button had
+   been going to the wrong page since it was written. #}
+{% block back %}<a class="back" href="/projects">&larr; Back</a>{% endblock %}
+{% block body %}
+
+{% if request.args.get('said') %}<div class="said">{{ request.args.get('said') }}</div>{% endif %}
+
+{# The "all workspaces" link went with the Back button being fixed. The maintainer:
+    -- two ways up, one of
+   them wrong, in a header that already has an arrow. #}
+<p class="freshness">{{ items|length }}
+  {{ schema.item_label if items|length == 1 else schema.item_label_plural }}
+  read at {{ read_at.strftime('%H:%M:%S') }}</p>
+
+{% if panels %}
+  {% include "_panels.html" with context %}
+{% endif %}
+
+{% if items %}
+  {% include "_items.html" with context %}
+{% else %}
+  <p class="empty">Nothing in this workspace yet. Ask me to start
+    {{ schema.item_label.lower() }} — I will show you what I would create
+    before anything is written.</p>
+{% endif %}
+
+{# The "+ Add" and "- Remove" fold-outs stood here. They are the card grid's
+   job now: the empty card adds one, and the minus on a card in Edit mode
+   retires it. Two ways to do the same thing, one of them three clicks deeper,
+   is how a page stops being read. #}
+
+{% endblock %}

@@ -1,0 +1,29 @@
+{% extends "base.html" %}
+{% from "_subtabs.html" import linked_subtabs %}
+{% block heading %}Tools{% endblock %}
+{% block body %}
+
+{# Asked for on 2026-09-05: rename the YOURS tab to Tools, and move LIBRARY
+   inside it as a sub-tab.
+
+   Three tabs now, and the Library is the third. It keeps its own address --
+   see the note in `navigation.py` -- so the strip carries an href per tab
+   rather than building them all from one base. #}
+{{ linked_subtabs(tab, [
+     ("skills", "Skills", "/yours?tab=skills"),
+     ("specialists", "Specialists", "/yours?tab=specialists"),
+     ("library", "Library", "/library")]) }}
+
+{% if note %}<div class="note">{{ note }}</div>{% endif %}
+
+{% if tab == "specialists" %}
+  <p class="freshness">Somebody to hand a job to &mdash; a named role with its
+     own brief, so the work arrives already framed.</p>
+  {% include "_specialists.html" %}
+{% else %}
+  <p class="freshness">A way of doing something, written down once so it is
+     done the same way every time.</p>
+  {% include "_skills.html" %}
+{% endif %}
+
+{% endblock %}

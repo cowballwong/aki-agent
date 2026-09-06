@@ -1,0 +1,26 @@
+{% extends "base.html" %}
+{% block heading %}Set-up guides{% endblock %}
+{% block body %}
+
+<p class="muted">
+  Every connection and setting that needs explaining, with how long it takes
+  said before you start.
+</p>
+
+<ul class="guide-list">
+  {% for guide in guides %}
+  <li>
+    <a href="{{ url_for('guide_page', topic=guide.topic) }}">{{ guide.title }}</a>
+    <span class="muted">
+      · {% if guide.minutes %}{{ guide.minutes }} min{% else %}quick{% endif %}
+    </span>
+    {% if guide.why %}<div class="muted">{{ guide.why }}</div>{% endif %}
+  </li>
+  {% endfor %}
+</ul>
+
+<p class="muted" style="margin-top:1.4rem">
+  The same guides work without a browser: <code>aki-agent guide</code>
+</p>
+
+{% endblock %}

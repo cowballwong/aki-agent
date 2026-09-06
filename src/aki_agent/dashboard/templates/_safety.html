@@ -1,0 +1,46 @@
+<p class="freshness">A short list of commands that are refused outright, in
+  any mode, with no prompt &mdash; including when the assistant is running
+  unattended.</p>
+
+<div class="note">
+  <b>This list is not editable, and that is the point.</b> It is the floor
+  underneath permission prompts, not another set of preferences: every entry
+  is an operation whose worst case cannot be undone. A floor that can be
+  lifted from a web page is not a floor &mdash; and the moment somebody most
+  wants to lift one is the moment it is doing its job.
+  <br><br>
+  Looking for the rules you <i>can</i> change &mdash; how the assistant
+  works, what it may touch, what it should never mention? Those are yours and
+  they live in your workspace&rsquo;s <code>CLAUDE.md</code>. Ask the
+  assistant to change them, in your own words.
+</div>
+
+<div class="card"><pre>{{ hard_rules }}</pre></div>
+
+<h2 class="section">What it has stopped</h2>
+
+{% if blocked %}
+  <table>
+    <thead><tr><th>When</th><th>Command</th><th>Why</th></tr></thead>
+    <tbody>
+      {% for entry in blocked %}
+        <tr>
+          <td class="mono">{{ entry.at }}</td>
+          <td class="mono">{{ entry.command }}</td>
+          <td>{{ entry.why }}</td>
+        </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+{% else %}
+  <p class="empty">Nothing has been refused. This list started on the day the
+    gate began keeping one &mdash; before that it was stopping things without
+    writing them down, so an empty table here does not mean it has never
+    fired.</p>
+{% endif %}
+
+{# "most recent 200" corrected 2026-09-05: the FILE keeps 200
+   (`safety_gate.py`), but `recent()` defaults to 50 and both callers pass
+   nothing, so the page has always shown 50. #}
+<p class="freshness">The last 50, from <code>{{ log_path }}</code>, which
+keeps 200.</p>

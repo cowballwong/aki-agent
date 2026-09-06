@@ -1,0 +1,298 @@
+{% extends "base.html" %}
+{% block heading %}{{ nav_label }}{% endblock %}
+{% block body %}
+
+{# The folder the WORKSPACES are in, not the one the assistant is in.
+
+   Reported wrong on 2026-09-04: the link should point at
+   `Aki-Agent/03_Workspace/...`, and that was right. This printed
+   `space.root`, which is the assistant's own
+   folder; the workspaces live one level down in `03_Workspace`, which is what
+   `work_root()` answers and what somebody reading this line would go looking
+   for. #}
+<p class="freshness">Read from disk at {{ read_at.strftime('%H:%M:%S') }}.
+{% if work_root %} Folder: {{ work_root }}{% endif %}</p>
+
+{% if request.args.get('said') %}<div class="said">{{ request.args.get('said') }}</div>{% endif %}
+
+{% for problem in space.problems %}
+  <div class="note">{{ problem }}</div>
+{% endfor %}
+
+{# The count strip stood here, taken away on 2026-09-05.
+   It grouped the items by a schema field, and with nothing filled in it read
+   "3 --" -- a count of three somethings with no name. A number that cannot
+   say what it counts is worse than no number. #}
+
+{% set grouped = space.by_workspace() %}
+
+{% if not space.items %}
+  <p class="empty">Nothing to show yet.</p>
+
+{% elif grouped|length > 1 %}
+{#
+  More than one workspace, so this page is the list of workspaces and the
+  projects are one click in (decided 2026-08-17).
+
+  Not one long page of every table: the two halves of somebody's life are
+  genuinely separate, and reading a piano pupil's row while looking for a
+  building project is noise. The count is on the card because "how much is in
+  there" is the one thing worth knowing before deciding to open it.
+#}
+  {# ONE form around the whole grid, and one Edit button for all of it.
+     Reported on 2026-09-04: a fold-out form on every card looked poor, and
+     one Refresh button plus one Edit button would do instead. #}
+  <form method="post" action="/workspace/rename" id="renameall">
+  <input type="hidden" name="token" value="{{ token }}">
+  {# Filled by the prompt before a removal. `/workspace/remove` checks it
+     against the name, which is why the prompt asks for the name and not for
+     a yes -- the second question is a real gate, not a politeness. #}
+  <input type="hidden" name="confirm" id="wsconfirm" value="">
+
+  {# BOTH BUTTONS IN ONE ROW. Asked for on 2026-09-05: move the Refresh
+     from Folder button up, beside Edit Names.
+
+     They cannot be two forms side by side -- a form cannot be nested inside
+     another, and the rename form has to wrap the whole grid to carry every
+     field. So Refresh is a second submit button on the same form with its
+     own `formaction`, which is what that attribute is for. #}
+  <div class="wstools">
+    <button type="button" class="wsbtn" id="wsedit">Edit names</button>
+    <button type="submit" class="wsbtn primary" id="wssave" hidden>Save</button>
+    <button type="button" class="wsbtn" id="wscancel" hidden>Cancel</button>
+    <button type="submit" class="wsbtn" id="wsrefresh"
+            formaction="/workspace/refresh"
+            title="Read the folders again and make your settings match them.
+                   Nothing on disk is changed.">Refresh from folders</button>
+    <span class="wshint" id="wshint" hidden>Change any of the names, then Save.
+      The folder and your settings move together.</span>
+  </div>
+
+  {# Sorted by name, as asked -- and the
+     numbers people put in front of these names (`01_`, `02_`) exist to
+     produce exactly this order in a file manager, so the dashboard showing
+     them in another order is the dashboard ignoring what they said. #}
+  <div class="cards">
+    {% for name, schema, items in grouped|sort(attribute='0') %}
+      {# The card is a link and the name is a field, and a form cannot live
+         inside an anchor. So the field sits beside the card and the ONE form
+         wraps the whole grid -- which is also what lets several be renamed
+         together. Out of edit mode the field is hidden and the card is an
+         ordinary link. #}
+      {# THE WRAPPER IS THE CARD, and the name inside it is the link.
+
+         The first attempt kept `<a class="card">` and put the field beside
+         it, because a form control cannot live inside an anchor. In edit
+         mode the name was hidden, so the card collapsed to its count line
+         and the field appeared underneath as a loose row -- the layout in
+         the screenshot that would have been seen next.
+
+         Only the NAME needs to be a link. Everything else is text, so the
+         anchor shrinks to the title and the field takes its place. #}
+      <div class="cardwrap card">
+        <span class="wshead">
+          <a class="wsname" href="/workspace/{{ name|urlencode }}">{{ name }}</a>
+          <input type="hidden" name="was" value="{{ name }}">
+          <input type="text" class="wsedit" name="to" value="{{ name }}"
+                 aria-label="New name for {{ name }}" hidden>
+          {# Asked for on 2026-09-05: this should follow the same logic as
+             the project folder [+][-]. Same control, same two questions, same route it
+             always used. #}
+          <button type="submit" class="itdrop wsdrop" hidden
+                  formaction="/workspace/remove" name="name" value="{{ name }}"
+                  data-what="{{ name }}"
+                  title="Retire this workspace"
+                  aria-label="Remove {{ name }}">&minus;</button>
+        </span>
+        <span class="count">{{ items|length }}
+          {{ schema.item_label if items|length == 1 else schema.item_label_plural }}</span>
+        {% set trouble = items|selectattr('has_problems')|list|length %}
+        {% if trouble %}
+          <span class="pill bad">{{ trouble }} need a look</span>
+        {% endif %}
+      </div>
+    {% endfor %}
+
+    {# The empty card, the same one the projects and Today use. #}
+    <div class="cardwrap card addcard" id="addspace">
+      <button type="button" class="addopen" id="addspaceopen">
+        <span class="plus" aria-hidden="true">+</span>
+        <span class="addsays">Add a workspace</span>
+      </button>
+      <span class="addfields" id="addspacefields" hidden>
+        <input type="text" name="name" id="addspacename"
+               placeholder="Church, Piano, Family..."
+               aria-label="Name for the new workspace">
+        <button type="submit" class="wsbtn primary" formaction="/workspace/new"
+                id="addspacego">Add</button>
+      </span>
+    </div>
+  </div>
+  </form>
+
+
+<script>
+/* Edit mode: every name becomes a field, Edit becomes Save.
+
+   The confirmation lists what is about to change, because "are you sure?"
+   with nothing in it is a question nobody can answer -- and this one moves
+   folders on disk. */
+(function () {
+  var form = document.getElementById('renameall');
+  var edit = document.getElementById('wsedit');
+  var save = document.getElementById('wssave');
+  var cancel = document.getElementById('wscancel');
+  var hint = document.getElementById('wshint');
+  if (!form || !edit || !save) { return; }
+
+  var fields = [].slice.call(form.querySelectorAll('.wsedit'));
+  var labels = [].slice.call(form.querySelectorAll('.wsname'));
+  var drops = [].slice.call(form.querySelectorAll('.wsdrop'));
+
+  function mode(on) {
+    fields.forEach(function (one) { one.hidden = !on; });
+    labels.forEach(function (one) { one.hidden = on; });
+    drops.forEach(function (one) { one.hidden = !on; });
+    form.classList.toggle('editing', on);
+    edit.hidden = on;
+    save.hidden = !on;
+    cancel.hidden = !on;
+    hint.hidden = !on;
+    if (on && fields[0]) { fields[0].focus(); fields[0].select(); }
+  }
+
+  edit.addEventListener('click', function () { mode(true); });
+
+  /* The plus card opens into its own field rather than a dialog: one name is
+     not worth a modal, and the card is already the right size for it. */
+  var opener = document.getElementById('addspaceopen');
+  var opened = document.getElementById('addspacefields');
+  var newname = document.getElementById('addspacename');
+  if (opener && opened) {
+    opener.addEventListener('click', function () {
+      opener.hidden = true;
+      opened.hidden = false;
+      if (newname) { newname.focus(); }
+    });
+  }
+
+  cancel.addEventListener('click', function () {
+    fields.forEach(function (one) { one.value = one.defaultValue; });
+    mode(false);
+  });
+
+  form.addEventListener('submit', function (e) {
+    var who = e.submitter;
+
+    /* Refresh shares this form so it can sit in the same row, so it also
+       arrives here. It is not a rename and must not be confirmed as one. */
+    if (who && who.id === 'wsrefresh') { return; }
+
+    /* Adding needs a name and nothing else. */
+    if (who && who.id === 'addspacego') {
+      if (!newname || !newname.value.trim()) { e.preventDefault(); }
+      return;
+    }
+
+    /* Removing asks twice, and the second answer is the name -- which the
+       server checks as well, so a wrong one is refused there too. The same
+       shape as the projects was asked for: it should follow the same logic
+       as the project folder [+][-]. */
+    if (who && who.classList.contains('wsdrop')) {
+      var what = who.getAttribute('data-what') || '';
+      if (!window.confirm(
+          'Retire the ' + what + ' workspace and everything in it?' +
+          '\n\nIt is moved into the sandbox under _removed, not deleted.')) {
+        e.preventDefault();
+        return;
+      }
+      var typed = window.prompt('Type its name to confirm:\n\n  ' + what);
+      if (typed === null) { e.preventDefault(); return; }
+      var slot = document.getElementById('wsconfirm');
+      if (slot) { slot.value = typed; }
+      return;
+    }
+
+    var changes = fields
+      .map(function (one) { return [one.defaultValue, one.value.trim()]; })
+      .filter(function (pair) { return pair[1] && pair[1] !== pair[0]; });
+
+    if (!changes.length) {
+      e.preventDefault();
+      mode(false);
+      return;
+    }
+    var says = changes.map(function (pair) {
+      return '  ' + pair[0] + '  -> ' + pair[1];
+    }).join('\n');
+    if (!window.confirm(
+        'Rename ' + changes.length +
+        (changes.length === 1 ? ' workspace?' : ' workspaces?') +
+        '\n\n' + says +
+        '\n\nThe folders on disk are renamed too.')) {
+      e.preventDefault();
+    }
+  });
+})();
+</script>
+
+{% else %}
+{#
+  One workspace (or none configured at all): show the items straight away.
+  Making somebody click through a list of one is a page that exists to
+  describe the software's structure rather than to show them their work.
+#}
+  {% set only_name, schema, items = grouped[0] %}
+  {% if panels %}
+    {% include "_panels.html" with context %}
+  {% endif %}
+  {% include "_items.html" with context %}
+
+  {# A WAY TO ADD A SECOND WORKSPACE, which this branch had lost.
+
+     With one workspace the page shows its projects rather than a list of
+     one, so the workspace cards -- and the `+` card with them -- are not
+     drawn at all. Taking the old fold-outs away therefore left somebody with
+     one workspace no way to make a second. Caught by
+     `test_the_front_page_offers_adding_and_removing_a_workspace`, which is
+     exactly the shape of gap a test earns its keep on: the page still looked
+     complete. #}
+  <form method="post" action="/workspace/new" class="onlyspace">
+    <input type="hidden" name="token" value="{{ token }}">
+    <div class="favourites">
+      <div class="cardwrap card addcard" id="addspace">
+        <button type="button" class="addopen" id="addspaceopen">
+          <span class="plus" aria-hidden="true">+</span>
+          <span class="addsays">Add a workspace</span>
+        </button>
+        <span class="addfields" id="addspacefields" hidden>
+          <input type="text" name="name" id="addspacename"
+                 placeholder="Church, Piano, Family..."
+                 aria-label="Name for the new workspace">
+          <button type="submit" class="wsbtn primary">Add</button>
+        </span>
+      </div>
+    </div>
+  </form>
+
+  <script>
+  /* The same opener as the grid's, for the one card this branch draws. */
+  (function () {
+    var open = document.getElementById('addspaceopen');
+    var box = document.getElementById('addspacefields');
+    var name = document.getElementById('addspacename');
+    if (!open || !box) { return; }
+    open.addEventListener('click', function () {
+      open.hidden = true;
+      box.hidden = false;
+      if (name) { name.focus(); }
+    });
+  })();
+  </script>
+{% endif %}
+
+{# The "+ Add a workspace" and "- Remove a workspace" fold-outs stood
+   here. They are the card grid's job now, the same as the projects:
+   the empty card adds one and the minus on a card retires it. #}
+
+{% endblock %}

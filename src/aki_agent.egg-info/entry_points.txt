@@ -1,0 +1,3 @@
+[console_scripts]
+aki-agent-dashboard = aki_agent.dashboard.app:main
+aki-agent-doctor = aki_agent.doctor:main

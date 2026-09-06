@@ -1,0 +1,43 @@
+{# The three things you reach for without reading the page first.
+   Asked for on 2026-08-23: two more quick buttons beside [RECYCLE NOW],
+   [EOD] and [ME TIME] — and, later the same day, that they belong on the
+   left side bar grouped with Close Dashboard, which is where they are now.
+
+   They act on the assistant rather than on the day, so they sit with the
+   other controls that do, and Today gets the height back. #}
+<div class="quickrow">
+
+  {# `data-working` raises the overlay in base.html for the length of the
+     request. Both of these hold the browser while something real happens at
+     the other end, and neither said so: reported on 2026-09-04 of End of
+     day, that pressing it left the dashboard looking unresponsive with no
+     way to tell what was happening. #}
+  <form method="post" action="/sessions/recycle-now"
+        data-working="Restarting the session"
+        data-working-note="It saves where it is first, so nothing is lost. This page comes back on its own."
+        onsubmit="return confirm('Restart the session now?\n\nIt saves where you are first, then restarts even if the session is busy.');">
+    <input type="hidden" name="token" value="{{ token }}">
+    <button type="submit" class="quick">Recycle now</button>
+  </form>
+
+  <form method="post" action="/today/eod"
+        data-working="Writing up the day"
+        data-working-note="This is the same job as the 18:30 wrap-up, so give it a minute or two. When it is done it is saved under History and sent to you the way Aki's other messages arrive. You can leave this page.">
+    <input type="hidden" name="token" value="{{ token }}">
+    <button type="submit" class="quick">End of day</button>
+  </form>
+
+  {# A switch, not an action -- so it says which way it is, not what it
+     would do. It stops when you are back at the desk and press the button
+     again. #}
+  <form method="post" action="/today/me-time">
+    <input type="hidden" name="token" value="{{ token }}">
+    <button type="submit" class="quick{{ ' on' if me_time.on }}">
+      Me time{{ ' — on ' + me_time.running_for() if me_time.on }}
+    </button>
+  </form>
+
+</div>
+{% if me_time.on %}
+  <p class="freshness centred">{{ me_time_says or me_time.sentence() }}</p>
+{% endif %}

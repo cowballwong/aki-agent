@@ -1,0 +1,124 @@
+{# Telegram, the chat box and the way in from outside -- the three ways
+   a message or a person reaches this assistant. The page had grown too
+   crowded to read, so it was split into sub-tabs on 2026-08-29. #}
+<h2><span class="ico">&#9672;</span>Telegram</h2> {{ howto('telegram') }}
+<div class="card">
+  <div class="row">
+    <div>Plugin: {% if telegram.plugin_installed %}<span class="badge on">{{ telegram.plugin_version }}</span>{% else %}<span class="badge off">not installed</span>{% endif %}</div>
+    <div>Bot token:
+      {% if telegram.token_present %}<span class="badge on">saved</span>
+      {% else %}<span class="badge off">none</span>{% endif %}
+      {# Shown on its own condition rather than the badge's. The two read the
+         same file by different routes, and a page that says "saved" beside a
+         blank space is worse than one that says nothing. #}
+      {% if telegram_fingerprint %}<span class="blank">{{ telegram_fingerprint }}</span>{% endif %}
+    </div>
+  </div>
+  <p class="freshness">{{ telegram_next }}</p>
+
+  <p class="freshness">
+    The token itself is never shown, here or anywhere. It is a password: it
+    lets whoever has it send and read messages as your bot, and a value
+    printed into a web page ends up in the browser cache, in every screenshot
+    of this page, and on screen during any screen share. What is shown above
+    is the bot number and the last four characters &mdash; enough to tell
+    which token is saved, not enough to use it.
+  </p>
+
+  <p class="sub">Allowed to message this assistant:</p>
+  {% if allowed_ids %}
+  <table>
+    <tbody>
+    {% for one in allowed_ids %}
+      <tr>
+        <td><b>{{ one }}</b></td>
+        <td>
+          <form method="post" action="/connections/telegram" class="inline"
+                onsubmit="return confirm('Stop this person reaching your assistant?')">
+            <input type="hidden" name="token" value="{{ token }}">
+            <input type="hidden" name="action" value="remove">
+            <input type="hidden" name="user_id" value="{{ one }}">
+            <button type="submit">Remove</button>
+          </form>
+        </td>
+      </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+  {% else %}
+    <p class="empty">Nobody yet &mdash; so nothing can reach you on Telegram.</p>
+  {% endif %}
+
+  {% if not telegram.plugin_installed %}
+    <p class="freshness">In Claude Code, type: <b>{{ install_command }}</b></p>
+  {% endif %}
+
+  {% if telegram.token_present %}
+  <details class="change">
+    <summary>Change the bot token</summary>
+  {% endif %}
+  <form method="post" action="/connections/telegram">
+    <input type="hidden" name="token" value="{{ token }}">
+    <input type="hidden" name="action" value="token">
+    <label>Bot token from @BotFather
+      <span class="reveal">
+        <input name="token_value" type="password" placeholder="1234567890:AA..."
+               autocomplete="off" spellcheck="false" data-secret>
+        <button type="button" class="eye" data-reveal
+                aria-label="Show what I typed" title="Show what I typed">&#128065;</button>
+      </span>
+    </label>
+    <button type="submit">Save token</button>
+    <p class="freshness">
+      Masked while you type it, because you will be pasting a password into a
+      window that may be shared or screenshotted. The eye shows it back to you
+      so you can check the paste landed &mdash; useful, because a token with a
+      space on the end fails in a way that looks like the bot being wrong.
+    </p>
+  </form>
+  {% if telegram.token_present %}</details>{% endif %}
+
+  {% if allowed_ids %}
+  <details class="change">
+    <summary>Allow somebody else</summary>
+  {% endif %}
+  <form method="post" action="/connections/telegram">
+    <input type="hidden" name="token" value="{{ token }}">
+    <input type="hidden" name="action" value="allow">
+    <label>Their Telegram id (message @userinfobot to get it)
+      <input name="user_id" placeholder="412587349" autocomplete="off"></label>
+    <button type="submit">Allow this person</button>
+  </form>
+  {% if allowed_ids %}</details>{% endif %}
+</div>
+
+
+<h2><span class="ico">&#9741;</span>Reaching this when you are out</h2>
+{{ howto('remote-access') }}
+<div class="card">
+  <p class="freshness" style="margin-top:0">
+    Off by default. Turning it on puts this dashboard on the internet behind
+    your PIN and nothing else, so it is worth reading the guide first.
+  </p>
+  {% if remote_state and remote_state.on %}
+    <p><strong>On</strong> for <code>{{ remote_state.host }}</code>.</p>
+    <form method="post" action="{{ url_for('remote_access') }}">
+      <input type="hidden" name="token" value="{{ token }}">
+      <input type="hidden" name="off" value="1">
+      <button type="submit">Turn it off</button>
+    </form>
+  {% else %}
+    <form method="post" action="{{ url_for('remote_access') }}">
+      <input type="hidden" name="token" value="{{ token }}">
+      <label>The address your tunnel gives you
+        <input type="text" name="host" placeholder="a1b2.ngrok-free.app"
+               autocomplete="off" spellcheck="false">
+      </label>
+      <button type="submit">Turn it on</button>
+    </form>
+    <p class="freshness">
+      Just the address &mdash; no https:// and no port. Only that exact
+      address is answered.
+    </p>
+  {% endif %}
+</div>

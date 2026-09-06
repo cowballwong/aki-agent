@@ -1,0 +1,127 @@
+{# Quiet Time.
+
+
+
+   A mode is a window plus the days it applies on. Each scheduled task points
+   at one, which is what makes "quiet at night, except the morning summary"
+   something you can say rather than something you have to work around. #}
+
+<h2 class="section">Quiet Time</h2>
+
+<p class="freshness">
+  Quiet stops the message, never the work. A task inside its quiet window
+  still runs and still writes to the day&rsquo;s log &mdash; what it wanted
+  to say is <b>held</b> and delivered afterwards as one summary. Nothing is
+  ever dropped.
+</p>
+
+<div class="modes">
+  {% for mode in modes %}
+    <form method="post" action="/notifications/mode" class="card quietmode">
+      <input type="hidden" name="token" value="{{ token }}">
+      <input type="hidden" name="key" value="{{ mode.key }}">
+
+      <div class="quietmodehead">
+        {% if mode.built_in %}
+          <b>{{ mode.name }}</b><span class="pill">built in</span>
+        {% else %}
+          <input name="name" value="{{ mode.name }}" class="quietmodename"
+                 aria-label="Name of this mode">
+        {% endif %}
+        <span class="sub">{{ mode.when() }}</span>
+      </div>
+
+      <div class="row tight">
+        <label>Quiet from<input name="start" type="time" value="{{ mode.start }}"></label>
+        <label>until<input name="end" type="time" value="{{ mode.end }}"></label>
+      </div>
+
+      <div class="strip">
+        {% for day in weekdays %}
+          <label class="chip">
+            <input type="checkbox" name="day_{{ day }}"
+                   {{ 'checked' if day in mode.days }}> {{ day }}
+          </label>
+        {% endfor %}
+      </div>
+      <p class="freshness">
+        It applies on the days you tick, and no others. Set the two times the
+        same for all day.
+      </p>
+
+      <div class="row tight">
+        <button type="submit">Save</button>
+        {% if not mode.built_in %}
+          <button type="submit" formaction="/notifications/mode/delete"
+                  class="linklike"
+                  onsubmit="return confirm('Delete this mode?')">delete</button>
+        {% endif %}
+      </div>
+    </form>
+  {% endfor %}
+
+  <form method="post" action="/notifications/mode" class="card quietmode new">
+    <input type="hidden" name="token" value="{{ token }}">
+    <input type="hidden" name="key" value="">
+    <div class="quietmodehead"><b>A mode of your own</b></div>
+    <label>Call it<input name="name" placeholder="School run"></label>
+    <div class="row tight">
+      <label>Quiet from<input name="start" type="time" value="09:00"></label>
+      <label>until<input name="end" type="time" value="15:00"></label>
+    </div>
+    <div class="strip">
+      {% for day in weekdays %}
+        <label class="chip"><input type="checkbox" name="day_{{ day }}"> {{ day }}</label>
+      {% endfor %}
+    </div>
+    <button type="submit" class="primary">Add this mode</button>
+  </form>
+</div>
+
+
+<h2 class="section">Which tasks obey which</h2>
+
+<p class="freshness">
+  Every scheduled task, and when it is allowed to reach you. The ones that
+  are not running automatically are shown faded &mdash; they cannot interrupt
+  you either way, but they keep the setting for when you switch them on.
+</p>
+
+<table>
+  <thead><tr><th>Task</th><th>When it runs</th><th>Reaches you</th></tr></thead>
+  <tbody>
+  {% for task in tasks %}
+    <tr class="{{ '' if is_installed.get(task.key) else 'sleeping' }}">
+      <td>{{ task.title }}
+        {% if task.built_in %}<span class="pill">built in</span>{% endif %}
+      </td>
+      <td class="blank">{{ task.when() }}</td>
+      <td>
+        {# One control carrying one state, the same shape as the on/off
+           switch on Schedule. "Never" is the switch that used to live over
+           there as "quiet"; it is here now because this is the page about
+           being interrupted. #}
+        <form method="post" action="/notifications/assign" class="inline">
+          <input type="hidden" name="token" value="{{ token }}">
+          <input type="hidden" name="key" value="{{ task.key }}">
+          <select name="mode" onchange="this.form.submit()">
+            <option value="always" {{ 'selected' if assigned.get(task.key) == 'always' }}>
+              Always &mdash; never held
+            </option>
+            {% for mode in modes %}
+              <option value="{{ mode.key }}"
+                      {{ 'selected' if assigned.get(task.key) == mode.key }}>
+                Quiet on {{ mode.name }} ({{ mode.when() }})
+              </option>
+            {% endfor %}
+            <option value="never" {{ 'selected' if assigned.get(task.key) == 'never' }}>
+              Never &mdash; keep it in the log only
+            </option>
+          </select>
+          <noscript><button type="submit">Set</button></noscript>
+        </form>
+      </td>
+    </tr>
+  {% endfor %}
+  </tbody>
+</table>

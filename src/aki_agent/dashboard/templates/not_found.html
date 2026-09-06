@@ -1,0 +1,7 @@
+{% extends "base.html" %}
+{% block titlemode %}page{% endblock %}
+{% block heading %}Not found{% endblock %}
+{% block body %}
+<p class="empty">There is nothing at that address.</p>
+<p><a href="/">Back to {{ item_label_plural|lower }}</a></p>
+{% endblock %}

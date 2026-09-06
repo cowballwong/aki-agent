@@ -1,0 +1,60 @@
+<p class="freshness">
+  A theme is a whole look, not a colour: its palette, its typefaces, and how
+  solid the page feels &mdash; corners, shadow, and the weight of a rule.
+  It changes this dashboard only.
+</p>
+
+{% if note %}<div class="note">{{ note }}</div>{% endif %}
+
+<div class="themes">
+  {% for one in themes %}
+    <form method="post" action="/theme/choose"
+          class="themecard{{ ' on' if chosen and chosen.key == one.key }}">
+      <input type="hidden" name="token" value="{{ token }}">
+      <input type="hidden" name="theme" value="{{ one.key }}">
+      <button type="submit" title="Use {{ one.name }}">
+
+        {# A specimen, not a swatch. The point of the redesign is that these
+           differ in type and weight as well as hue, so the preview has to
+           show type and weight — a row of coloured squares would say the
+           opposite of what the page is claiming. #}
+        <span class="specimen"
+              style="--s-accent: {{ one.accent }};
+                     --s-ink: {{ '#241f1a' if one.ground == 'light' else '#e8eceb' }};
+                     --s-ground: {{ '#faf8f4' if one.ground == 'light' else '#0c1013' }};
+                     --s-radius: {{ one.radius }};
+                     --s-shadow: {{ one.shadow }};
+                     --s-hair: {{ one.border_weight }};">
+          <span class="s-title" style="font-family: {{ one.display | safe }}">Today</span>
+          <span class="s-body" style="font-family: {{ one.sans | safe }}">
+            Three things need you.
+          </span>
+          <span class="s-num" style="font-family: {{ one.mono | safe }}">105.9M</span>
+          <span class="s-chip">waiting</span>
+        </span>
+
+        <span class="themename">
+          <b>{{ one.name }}</b>
+          <span class="badge">{{ one.ground }}</span>
+          {% if chosen and chosen.key == one.key %}
+            <span class="badge on">in use</span>
+          {% endif %}
+        </span>
+        <span class="themefeel">{{ one.sample() }}</span>
+        <span class="sub">{{ one.why }}</span>
+      </button>
+    </form>
+  {% endfor %}
+</div>
+
+{% if not chosen %}
+  <p class="sub">
+    Your colour is set to <code>{{ current }}</code>, which is not one of
+    these. Picking one replaces it; leaving it alone keeps what you have.
+  </p>
+{% endif %}
+
+<p class="sub">
+  Day and Night, at the foot of the rail, override a theme's ground for this
+  browser only. Choosing a theme here clears that override.
+</p>

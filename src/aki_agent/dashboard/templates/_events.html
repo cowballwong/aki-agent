@@ -1,0 +1,23 @@
+<p class="freshness">{{ summary }}</p>
+
+{% if entries %}
+  <div class="card">
+    <table>
+      <thead>
+        <tr><th>Time</th><th>What</th><th>Who</th></tr>
+      </thead>
+      <tbody>
+        {% for entry in entries %}
+          <tr>
+            <td title="{{ entry.at.strftime('%d %b %Y %H:%M') }}">{{ entry.when }}</td>
+            <td><span class="kind kind-{{ entry.kind }}">{{ entry.kind }}</span> {{ entry.text }}</td>
+            <td class="muted">{{ entry.source or '&mdash;' }}</td>
+          </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+{% else %}
+  <p class="empty">Nothing recorded yet. This fills in as things happen &mdash;
+  scheduled work running, messages going out, notes being saved.</p>
+{% endif %}

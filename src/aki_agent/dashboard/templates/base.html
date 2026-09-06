@@ -1,0 +1,3573 @@
+<!doctype html>
+<html lang="en" data-ground="{{ ground }}"{% if ground == "light" %} class="light"{% endif %}>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>{% block title %}{{ assistant_name }}{% endblock %}</title>
+<link rel="icon" type="image/png" href="/static/leaf-mark-dark.png">
+<style>
+/* ---------------------------------------------------------------------------
+   THE SHELL
+
+   Three columns: a fixed left rail, the content, and a chat panel down the
+   right that is open by default and can be folded away.
+
+   Modelled on Hermes Agent's dashboard, from a screenshot of the real thing
+   rather than from memory. What that reference actually does, and this now
+   does too:
+
+     * a fixed left rail, not a top bar, with letterspaced small caps
+     * the rail's foot carries live state and the actions you reach for
+       when that state is wrong
+     * monospace for anything technical, sans for prose
+     * a ground TINTED with the accent rather than neutral grey -- this is
+       what makes a themed dashboard feel like one object instead of a grey
+       app with a coloured button in it
+     * pale solid buttons for the primary action against that dark ground
+
+   Every colour is derived from ONE value, --accent, which is the user's.
+   Change it and the entire surface moves. There is no second colour to get
+   wrong, and no combination that can clash.
+
+   The chat panel is CLOSED by default (reported 2026-08-24) and opens from the
+   tab on the right edge. It used to open itself, on the argument that an
+   assistant you have to go and find is one you stop talking to -- true for
+   the first minute, and afterwards a third of the window spent on a
+   conversation that is not happening.
+--------------------------------------------------------------------------- */
+:root {
+  --accent: {{ accent }};
+
+  --bg:      color-mix(in srgb, var(--accent) 7%, #07090b);
+  --rail:    color-mix(in srgb, var(--accent) 9%, #050708);
+  --surface: color-mix(in srgb, var(--accent) 6%, #0c1013);
+  --raised:  color-mix(in srgb, var(--accent) 11%, #0c1013);
+  --border:  color-mix(in srgb, var(--accent) 18%, #1b2226);
+
+  --fg:    #e8eceb;
+  --muted: color-mix(in srgb, var(--accent) 26%, #8e9a98);
+  /* The inside of an input. It was hardcoded to a near-black, so
+     every field on every page stayed dark in light mode -- which
+     nobody had seen, because the light palette was unreachable
+     until the Day/Night switch was added (2026-08-21). */
+  --field:   color-mix(in srgb, var(--accent) 4%, #050708);
+  --pale:  #f2ede1;
+  --on-pale: #10161a;
+
+  --warning: #ff9e3b;
+  --error:   #ff6b3d;
+  --critical:#ff4d4d;
+  --good:    #6ee7a8;
+
+  /* Everything below comes from the chosen theme (see `themes.py`). Before
+     2026-08-21 a theme set one hex value and nothing else, which made the
+     word "theme" a promise the page did not keep. These are the four things
+     that actually change how it feels: colour, ground, typography, and how
+     solid it looks. */
+  --radius-sm: {{ theme.radius_sm }};
+  --radius: {{ theme.radius }};
+  --shadow: {{ theme.shadow }};
+  --hair: {{ theme.border_weight }};
+
+  /* What can be read on top of a filled accent. Computed by the theme
+     from its own accent, because guessing was wrong: white on the Paper
+     accent measured 1.47:1. Four of the five themes want DARK text. */
+  --on-accent: {{ theme.on_accent }};
+
+  --mono: {{ theme.mono | safe }};
+  --sans: {{ theme.sans | safe }};
+  --display: {{ theme.display | safe }};
+  --body-size: {{ theme.body_size }};
+  --body-leading: {{ theme.body_leading }};
+  --label-spacing: {{ theme.label_spacing }};
+
+  --rail-width: 208px;
+
+  /* reported 2026-08-20: "covering the whole screen". 340px is unremarkable on
+     a wide monitor and most of a window on a laptop with a terminal beside
+     it -- and the rail takes another 208 before the page gets any. A fixed
+     pixel width is a width chosen for the author's monitor.
+
+     `clamp` keeps it readable at the bottom, proportional in the middle, and
+     stops it growing pointlessly wide at the top: a chat column past ~330px
+     is just a long line length. */
+  --chat-width: clamp(250px, 22vw, 330px);
+
+  /* How far the queue sheet rises: two thirds of the screen (the maintainer,
+     2026-08-24). Named once -- the button row's closed position is derived
+     from it, and a second copy of the number would drift from this one. */
+  --sheet-height: 66vh;
+
+  /* The three columns each begin with a header, and their bottom rules have
+     to be one line across the whole window. Measured before this existed:
+     61px, 49px and 52px. */
+  --head: 56px;
+}
+
+/* A light ground, for a bright room or anyone who reads dark text better.
+   ONLY the colours are redefined. Sizes stay in `:root` and are shared.
+
+   THE BUG THIS SHAPE PREVENTS (2026-08-20)
+   ----------------------------------------
+   The first version of this block was opened by moving the closing brace of
+   `:root` upwards, which left `--chat-width` and `--head` inside
+   `:root.light`. On the default dark ground they were therefore undefined,
+   `width: var(--chat-width)` became invalid, and a `position: fixed` panel
+   with no width sized itself to its content -- so the chat panel grew to
+   cover the entire page and pushed the text off the left edge.
+
+   It looked like a width that had not been tuned. It was a variable that did
+   not exist. And the "fix" that followed edited the declaration inside the
+   wrong block, so it appeared to be applied and changed nothing.
+
+   Every test passed throughout: 742 of them, none of which can see a
+   stylesheet. `test_dashboard_control` now asserts that every custom property
+   the page uses is defined on plain `:root`. */
+:root.light {
+  --bg:      color-mix(in srgb, var(--accent) 5%, #faf8f4);
+  --rail:    color-mix(in srgb, var(--accent) 8%, #f1ede6);
+  --surface: color-mix(in srgb, var(--accent) 4%, #ffffff);
+  --raised:  color-mix(in srgb, var(--accent) 9%, #f6f2ec);
+  --border:  color-mix(in srgb, var(--accent) 24%, #d8d2c8);
+
+  --fg:    #241f1a;
+  /* Darkened 2026-08-23: the rail's 10px controls use this and measured
+     4.25:1 on the light grounds -- under the 4.5 a small label needs. */
+  --muted: color-mix(in srgb, var(--accent) 30%, #574f47);
+  --pale:  #3a332c;
+  --on-pale: #f7f3ec;
+  --field:   color-mix(in srgb, var(--accent) 3%, #ffffff);
+
+  /* The semantic colours were only ever defined for the dark ground, so a
+     red chosen to glow on near-black sat at 2.6:1 on near-white -- the Stop
+     button, of all things. Same meanings, darkened until they read. */
+  --warning: #9a5b00;
+  --error:   #b03a12;
+  --critical:#b3261e;
+  --good:    #1f6b45;
+}
+
+/* Auto: follow the computer, unless Night was chosen explicitly.
+   Same tokens as `:root.light` — one palette, reached two ways. Without this
+   block "Auto" could only ever be dark, because nothing else applies the
+   light palette. */
+@media (prefers-color-scheme: light) {
+  :root:not(.dark) {
+  --bg:      color-mix(in srgb, var(--accent) 5%, #faf8f4);
+  --rail:    color-mix(in srgb, var(--accent) 8%, #f1ede6);
+  --surface: color-mix(in srgb, var(--accent) 4%, #ffffff);
+  --raised:  color-mix(in srgb, var(--accent) 9%, #f6f2ec);
+  --border:  color-mix(in srgb, var(--accent) 24%, #d8d2c8);
+
+  --fg:    #241f1a;
+  /* Darkened 2026-08-23: the rail's 10px controls use this and measured
+     4.25:1 on the light grounds -- under the 4.5 a small label needs. */
+  --muted: color-mix(in srgb, var(--accent) 30%, #574f47);
+  --pale:  #3a332c;
+  --on-pale: #f7f3ec;
+  --field:   color-mix(in srgb, var(--accent) 3%, #ffffff);
+
+  /* The semantic colours were only ever defined for the dark ground, so a
+     red chosen to glow on near-black sat at 2.6:1 on near-white -- the Stop
+     button, of all things. Same meanings, darkened until they read. */
+  --warning: #9a5b00;
+  --error:   #b03a12;
+  --critical:#b3261e;
+  --good:    #1f6b45;
+}
+}
+
+
+/* Headings take the theme's display face. On Blueprint that is the same
+   monospace as everything else, which is the point of Blueprint. */
+h1, h2, h3, .card-head .name, .brand .name {
+  font-family: var(--display);
+}
+
+* { box-sizing: border-box; }
+
+/* Scrollbars, in the page's own colours.
+
+
+
+   Everything else here is themed -- five themes, two grounds, an accent the
+   user picks -- and then a chrome-grey scrollbar appears down the side of the
+   chat panel and the raised queue and announces that the theme stops at the
+   edge of the content.
+
+   Written twice on purpose. `scrollbar-color` is the standard property and is
+   what Firefox honours; the `::-webkit-scrollbar` pseudo-elements are what
+   Chromium and Safari read, and they ignore the standard one when a
+   pseudo-element rule exists. Neither alone covers the browsers a student
+   might have. */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: color-mix(in srgb, var(--accent) 42%, var(--border))
+                   transparent;
+}
+::-webkit-scrollbar { width: 9px; height: 9px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb {
+  background: color-mix(in srgb, var(--accent) 36%, var(--border));
+  border-radius: 99px;
+  /* Inset from the edge, so the bar reads as part of the panel rather than
+     as a rail bolted to the side of it. */
+  border: 2px solid transparent;
+  background-clip: content-box;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: color-mix(in srgb, var(--accent) 62%, var(--border));
+  background-clip: content-box;
+}
+::-webkit-scrollbar-corner { background: transparent; }
+body {
+  margin: 0; background: var(--bg); color: var(--fg);
+  font: var(--body-size)/var(--body-leading) var(--sans);
+  -webkit-font-smoothing: antialiased;
+}
+
+/* --- left rail ---------------------------------------------------------- */
+.rail {
+  position: fixed; inset: 0 auto 0 0; width: var(--rail-width);
+  background: var(--rail); border-right: 1px solid var(--border);
+  display: flex; flex-direction: column; z-index: 20;
+}
+.brand {
+  height: var(--head); padding: 0 1rem;
+  border-bottom: 1px solid var(--border);
+  display: flex; align-items: center; gap: 0.5rem;
+}
+.brand .mark {
+  width: 20px; height: 20px; flex: none; display: grid; place-items: center;
+  border-radius: var(--radius-sm); color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 20%, transparent);
+  border: 1px solid color-mix(in srgb, var(--accent) 45%, transparent);
+  font: 600 10px/1 var(--mono);
+}
+.brand .name {
+  font: 700 13px/1.15 var(--display); letter-spacing: var(--label-spacing);
+  text-transform: uppercase; word-break: break-word;
+}
+.brand .for {
+  display: block; font: 400 9px/1.4 var(--mono); letter-spacing: 0.06em;
+  color: var(--muted); text-transform: none; margin-top: 0.15rem;
+}
+/* The guard table. `.dim` is the row that is shown and never acted on --
+   see guard.py rule 3: a number that looks like a threshold and is not one
+   gets read as the reason something happened. */
+/* A secret being typed in: masked, with a button to show it back.
+   The masking protects the moment of entry -- a screen share, somebody behind
+   you -- and nothing else. It is NOT a way to display a stored secret: a value
+   the browser has is a value in the page, whether or not it is drawn. */
+/* The theme swatches. A grid rather than a list because the thing being
+   chosen is a colour, and colours are compared side by side or not at all. */
+.swatches { display: grid; gap: 0.5rem; margin: 0.8rem 0;
+            grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); }
+.swatch button { display: grid; gap: 0.3rem 0.5rem; width: 100%; text-align: left;
+                 grid-template-columns: auto auto auto 1fr; align-items: center;
+                 padding: 0.6rem 0.7rem; }
+.swatch button .sub { grid-column: 1 / -1; margin: 0; }
+.swatch.on button { border-color: var(--accent); }
+.chip-colour { width: 1.15rem; height: 1.15rem; border-radius: 50%;
+               display: inline-block; border: 1px solid var(--border); }
+
+/* Something already connected: a line, and a way to change it.
+   The form underneath is closed until asked for -- an empty input beside a
+   working connection reads as "not set up" and asks for what it already has. */
+details.change > summary {
+  list-style: none; cursor: pointer; display: inline-block;
+  padding: 0.18rem 0.55rem; border: 1px solid var(--border);
+  border-radius: 0.28rem; font-size: 0.86em; margin-top: 0.4rem;
+}
+details.change > summary::-webkit-details-marker { display: none; }
+details.change > summary:hover { border-color: var(--accent); color: var(--accent); }
+details.change[open] > summary { border-color: var(--accent); color: var(--accent); }
+details.change > div, details.change > form { margin-top: 0.5rem; }
+
+/* Buttons that stop or restart something.
+   reported 2026-08-20. The point is not decoration: "Stop the dashboard" and
+   "Recycle now" sit among ordinary Save buttons and look exactly like them,
+   so the only thing standing between a mis-aimed click and a stopped
+   assistant is reading the label. Colour on hover is the warning arriving at
+   the moment the pointer is over it, which is the moment it is useful. */
+/* --- a button that reads as a link ---------------------------------------
+   For the small per-row actions -- edit, remove -- where a filled button in
+   every row of a table turns a quiet list into a wall of controls. The danger
+   variant is coloured but still quiet: a destructive action should be easy to
+   find and hard to hit by accident, which is what the confirm is for. */
+.metertools {
+  display: flex; align-items: center; gap: 0.6rem;
+  margin: -0.4rem 0 1rem;
+}
+.metertools .sub { font-size: 0.75rem; color: var(--muted); }
+.btn.small, button.small {
+  padding: 0.25rem 0.6rem; font-size: 0.78rem;
+}
+/* Unscoped on purpose. It was `.weather .fixit`, so the moment the same
+   affordance was used beside the usage rings the link came out in the
+   browser's default blue -- which on this palette reads as a rendering
+   fault rather than a link. The rule is about what a fix-it link IS, not
+   about which card it happens to sit in. */
+.fixit {
+  display: inline-block; margin-top: 0.3rem; font-size: 0.78rem;
+  color: var(--accent);
+}
+/* Under the pair of rings rather than under one of them, and aligned with
+   them rather than with the page. */
+/* What the rings cannot say for themselves, beside them rather than under
+   one of them. Two short lines at most: what the subscription actually did,
+   and where to start guessing if no figure is set. */
+.todaybar .usagesays {
+  align-self: center; order: 3; margin-left: 0.9rem;
+  display: flex; flex-direction: column; gap: 0.2rem;
+  max-width: 13rem; line-height: 1.4;
+}
+.todaybar .usagesays:empty { display: none; }
+.todaybar .limitnote { font-size: 0.72rem; color: var(--accent); }
+.todaybar .setallowance { margin: 0; font-size: 0.7rem; }
+
+pre.plain {
+  white-space: pre-wrap; font-family: inherit; font-size: 0.82rem;
+  line-height: 1.5; color: var(--muted); margin: 0.3rem 0 0;
+}
+
+button.link {
+  background: none; border: none; padding: 0.1rem 0.3rem; cursor: pointer;
+  color: var(--muted); font-size: 0.78rem; text-decoration: underline;
+  text-underline-offset: 2px;
+}
+button.link:hover { color: var(--accent); }
+button.link.danger { color: var(--muted); background: none; border: none; }
+button.link.danger:hover { color: #ff4d4d; background: none; }
+td.right, th.right { text-align: right; white-space: nowrap; }
+td.right form.inline { display: inline; }
+
+button.danger, .btn.danger, .act.danger {
+  border-color: color-mix(in srgb, #ff4d4d 40%, var(--border));
+}
+.act.danger:hover {
+  background: color-mix(in srgb, #ff4d4d 16%, var(--raised));
+  border-color: #ff4d4d;
+  color: #ff4d4d;
+}
+button.danger:hover, .btn.danger:hover {
+  background: color-mix(in srgb, #ff4d4d 16%, var(--raised));
+  border-color: #ff4d4d;
+  color: #ff4d4d;
+}
+.reveal { display: flex; gap: 0.3rem; align-items: stretch; }
+.reveal input { flex: 1; min-width: 0; }
+.reveal button.eye { padding: 0 0.55rem; line-height: 1; flex: none; }
+.reveal button.eye.on { color: var(--accent); }
+table.guard { width: 100%; border-collapse: collapse; margin: 0.6rem 0; }
+table.guard td { padding: 0.28rem 0.4rem; vertical-align: middle; }
+table.guard td.num { text-align: right; font-variant-numeric: tabular-nums;
+                     white-space: nowrap; }
+table.guard tr.dim { opacity: 0.5; }
+.rail nav { padding: 0.6rem 0.4rem; overflow-y: auto; flex: 1; }
+.rail nav a {
+  display: flex; align-items: center; gap: 0.55rem;
+  padding: 0.4rem 0.6rem; margin-bottom: 0.1rem;
+  color: var(--muted); text-decoration: none;
+  font: 10px/1 var(--mono); letter-spacing: 0.11em; text-transform: uppercase;
+  border-radius: var(--radius-sm); border-left: 2px solid transparent;
+}
+.rail nav a:hover {
+  color: var(--fg);
+  background: color-mix(in srgb, var(--accent) 8%, transparent);
+}
+.rail nav a.on {
+  color: var(--accent); border-left-color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 10%, transparent);
+}
+.rail nav a .ico { width: 13px; text-align: center; opacity: 0.85; flex: none; }
+.rail nav a .n { margin-left: auto; color: var(--accent); font-weight: 600;
+  letter-spacing: 0; }
+.rail .foot {
+  border-top: 1px solid var(--border); padding: 0.7rem 0.9rem 0.6rem;
+  font: 10px/1.7 var(--mono); color: var(--muted);
+}
+.rail .foot .h {
+  font-size: 9px; letter-spacing: 0.12em; text-transform: uppercase;
+  color: color-mix(in srgb, var(--accent) 45%, var(--muted));
+  margin-bottom: 0.2rem;
+}
+.rail .foot .act {
+  display: flex; align-items: center; gap: 0.4rem;
+  padding: 0.25rem 0; color: var(--muted);
+  font: 10px/1.6 var(--mono); letter-spacing: 0.06em; text-decoration: none;
+}
+.rail .foot .act:hover { color: var(--accent); }
+.rail .theme {
+  border-top: 1px solid var(--border); padding: 0.55rem 0.9rem;
+  display: flex; align-items: center; gap: 0.45rem;
+  font: 9px/1 var(--mono); letter-spacing: 0.11em; text-transform: uppercase;
+  color: var(--muted);
+}
+.rail .theme .swatch {
+  width: 9px; height: 9px; border-radius: 2px; background: var(--accent);
+  flex: none;
+}
+.rail .version {
+  padding: 0.5rem 0.9rem 0.8rem; display: flex; justify-content: space-between;
+  font: 9px/1 var(--mono); letter-spacing: 0.06em;
+  color: color-mix(in srgb, var(--muted) 60%, transparent);
+}
+
+/* --- content ------------------------------------------------------------ */
+.shell {
+  margin-left: var(--rail-width); margin-right: var(--chat-width);
+  min-height: 100vh; transition: margin-right 0.12s ease;
+}
+.chat-closed .shell { margin-right: 0; }
+.topbar {
+  display: flex; align-items: center; gap: 1rem;
+  height: var(--head); padding: 0 1.4rem;
+  border-bottom: 1px solid var(--border);
+}
+.topbar h1 { margin: 0; font: 500 17px/1.2 var(--sans); letter-spacing: -0.01em; }
+.topbar .actions { margin-left: auto; display: flex; gap: 0.4rem; }
+main { padding: 1.2rem 1.4rem 3rem; }
+
+/* --- right chat panel --------------------------------------------------- */
+
+/* --- the connection light ------------------------------------------------
+   reported 2026-08-20: "can we add a connection status light on top of the chat
+   panel". It answers a question the panel could not otherwise answer: a chat
+   quietly queueing into a local log looked exactly like a chat connected to
+   Telegram, which is how a sign-in that never completed went unnoticed for a
+   day. Three states, never two -- "cannot tell" is its own answer and must
+   not be painted as "no". */
+
+/* --- attachments in a bubble ---------------------------------------------
+   A photo is shown, a voice note plays where it sits, and anything else is a
+   line with a name and a size on it. The fallback matters more than the two
+   pretty cases: a player that cannot play the thing it was given is worse
+   than an honest link to it. */
+.bubble .shot {
+  display: block; max-width: 100%; border-radius: var(--radius-sm);
+  margin: 0.15rem 0 0.3rem; cursor: zoom-in; background: var(--raised);
+}
+.bubble audio, .bubble video {
+  display: block; width: 100%; margin: 0.2rem 0 0.15rem;
+  border-radius: var(--radius-sm);
+}
+.bubble audio { height: 34px; }
+.bubble .file {
+  display: flex; align-items: center; gap: 0.4rem; text-decoration: none;
+  padding: 0.35rem 0.5rem; margin: 0.15rem 0;
+  border: 1px solid var(--border); border-radius: var(--radius-sm);
+  background: color-mix(in srgb, var(--accent) 6%, transparent);
+  color: inherit; font-size: 0.8rem;
+}
+.bubble .file .nm { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.bubble .file .sz { margin-left: auto; color: var(--muted); font-size: 0.72rem; }
+
+/* --- the composer --------------------------------------------------------- */
+@keyframes pulse { 50% { opacity: 0.55; } }
+/* The button that brings it back once folded away. */
+
+/* --- sections ----------------------------------------------------------- */
+h2 {
+  display: flex; align-items: center; gap: 0.45rem;
+  font: 600 11px/1 var(--mono); letter-spacing: 0.13em;
+  text-transform: uppercase; color: var(--fg); margin: 1.6rem 0 0.55rem;
+}
+h2:first-child { margin-top: 0; }
+h2 .ico { color: var(--accent); }
+h2 .n { color: var(--muted); font-weight: 400; letter-spacing: 0.06em; }
+.sub { color: var(--muted); font: 11px/1.6 var(--sans); margin: -0.25rem 0 0.7rem; }
+.freshness {
+  color: var(--muted); font: 10px/1.6 var(--mono); letter-spacing: 0.03em;
+  margin: -0.2rem 0 0.8rem;
+}
+.empty { color: var(--muted); font-style: italic; }
+
+/* --- cards, badges, tables ---------------------------------------------- */
+.card {
+  background: var(--surface); border: 1px solid var(--border);
+  border-radius: var(--radius); padding: 0.75rem 0.9rem; margin-bottom: 0.5rem;
+}
+/* The workspace list on the front page. Wraps rather than scrolls: two or
+   three workspaces is the normal number, and a row that scrolls sideways
+   hides the very thing the page exists to show. */
+.cards { display: flex; flex-wrap: wrap; gap: 0.5rem; margin: 0.6rem 0; }
+.cards .card {
+  flex: 1 1 220px; margin: 0; text-decoration: none; color: inherit;
+  display: flex; flex-direction: column; gap: 0.3rem;
+}
+.cards .card:hover { border-color: var(--accent); }
+.cards .card b { font-size: 14px; }
+.cards .count { color: var(--muted); font: 11px/1.4 var(--mono); }
+
+/* The card is a link; the name is a field. A form cannot live inside an
+   anchor, so the one form wraps the whole grid and the field sits beside the
+   card it belongs to.
+
+   A fold-out form on every card came first, and the objection to it was
+   right: the controls outnumbered the things they controlled. */
+.cards .cardwrap {
+  flex: 1 1 220px; display: flex; flex-direction: column; gap: 0.3rem;
+  margin-bottom: 0;
+}
+.cards .cardwrap .wsname {
+  font: 700 14px/1.3 var(--sans); color: inherit; text-decoration: none;
+}
+.cards .cardwrap .wsname:hover { color: var(--accent); }
+.cards .cardwrap .wsedit {
+  margin: 0; width: 100%; font: 500 14px/1.3 var(--sans);
+}
+/* --- a project, as a card ----------------------------------------------- */
+/* Reuses `.favour` so a project looks the same here as it does on Today --
+   two shapes for one thing is how somebody stops recognising it. */
+form#renameitems { margin: 0; }
+.favour.itcard {
+  display: flex; flex-direction: column; gap: 0.35rem;
+  padding: 0.75rem 0.9rem; min-height: 8.4rem;
+  background: var(--surface); border: 1px solid var(--border);
+  border-left: 3px solid var(--border);
+  border-radius: 0 var(--radius) var(--radius) 0;
+}
+/* Pinned takes the accent spine, so the row shows at a glance which of these
+   are on Today. */
+.favour.itcard.pinned { border-left-color: var(--accent); }
+.favour.itcard:hover { border-color: var(--accent); }
+.favour.itcard .favourhead {
+  /* Centred, not on a baseline. The row holds a 33px input, a 15px star and
+     an 18px minus; a baseline lines up their text and leaves the boxes
+     ragged, which is what the edit mode looked like. A baseline is right for
+     words beside words and wrong for controls beside a field. */
+  display: flex; align-items: center; gap: 0.4rem; min-height: 1.9rem;
+}
+.favour.itcard .itname {
+  flex: 1; min-width: 0; font: 700 14px/1.3 var(--sans);
+  color: var(--fg); text-decoration: none;
+}
+.favour.itcard .itname:hover { color: var(--accent); }
+.favour.itcard .itedit { flex: 1; margin: 0; font: 500 14px/1.3 var(--sans); }
+
+button.pin, button.itdrop {
+  background: none; border: 0; padding: 0 0.15rem; cursor: pointer;
+  color: var(--muted); line-height: 1; flex: 0 0 auto;
+}
+button.pin { font-size: 1.05rem; }
+button.pin:hover { color: var(--accent); }
+button.pin.on { color: var(--accent); }
+button.pin:disabled { opacity: 0.35; cursor: default; }
+button.itdrop {
+  font: 700 1.1rem/1 var(--sans); color: var(--critical);
+  padding: 0 0.3rem; border-radius: var(--radius-sm);
+}
+button.itdrop:hover { background: color-mix(in srgb, var(--critical) 14%, transparent); }
+
+.itnote {
+  font-size: 0.82rem; line-height: 1.45; color: var(--muted);
+}
+.itcounts {
+  display: flex; gap: 0.7rem; flex-wrap: wrap; margin-top: auto;
+  font: 400 0.72rem/1.5 var(--mono); color: var(--muted);
+}
+.itcounts .quiet { opacity: 0.7; }
+.itcounts .when { margin-left: auto; }
+.itfields {
+  display: flex; flex-wrap: wrap; gap: 0.15rem 0.7rem;
+  font: 400 0.72rem/1.6 var(--mono); color: var(--muted);
+}
+.itfield b {
+  font-weight: 400; text-transform: uppercase; letter-spacing: 0.06em;
+  opacity: 0.75; margin-right: 0.25rem;
+}
+.itfields .bar { width: 3rem; vertical-align: middle; }
+
+/* A favourite card, and the arrows that arrange it. The card body stays the
+   link it always was; the arrows sit outside it, because a button inside an
+   anchor navigates rather than submits. */
+.favour.favwrap { padding: 0; }
+.favourbody {
+  display: flex; flex-direction: column; gap: 0.3rem; flex: 1;
+  padding: 0.75rem 0.9rem; text-decoration: none; color: var(--fg);
+}
+/* The card that says why the `+` is not there. Dashed like the empty card,
+   because it is standing in the same place -- but it has something to say
+   and something to press, so it is not centred like one. */
+.favour.lostcard {
+  justify-content: center; gap: 0.5rem;
+  padding: 0.75rem 0.9rem; text-align: left;
+  border-style: dashed; border-left-style: dashed;
+  border-left-color: var(--border);
+}
+.favour.lostcard .addsays {
+  font: 400 0.78rem/1.5 var(--sans); color: var(--muted);
+  letter-spacing: 0; text-transform: none;
+}
+.favour.lostcard button { align-self: flex-start; }
+
+/* Lifted while it is being moved, so the one you are pushing is obvious. */
+.favour.favwrap.moving {
+  border-color: var(--accent);
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.35);
+}
+.favmove {
+  display: flex; gap: 0.3rem; justify-content: center;
+  padding: 0 0.9rem 0.6rem;
+}
+button.favarrow {
+  flex: 1; padding: 0.2rem 0; border-radius: var(--radius-sm);
+  border: 1px solid var(--border); background: var(--raised);
+  color: var(--fg); cursor: pointer; font-size: 0.9rem; line-height: 1.2;
+}
+button.favarrow:hover:not(:disabled) { border-color: var(--accent); }
+button.favarrow:disabled { opacity: 0.3; cursor: default; }
+
+/* The plus card opens into its own field.
+
+   The dashed outline moved from `button.favour.addcard` to the class itself:
+   on Today the card IS the button, and here it is a div holding one, so a
+   rule written for the button left this one with no outline at all. */
+.favour.addcard {
+  padding: 0; background: transparent;
+  border: 1px dashed var(--border); border-radius: var(--radius);
+  display: flex; flex-direction: column;
+}
+.favour.addcard:hover { border-color: var(--accent); }
+button.addopen {
+  display: flex; flex-direction: column; align-items: center;
+  justify-content: center; gap: 0.4rem; width: 100%; height: 100%;
+  min-height: 8.4rem; padding: 0.75rem 0.9rem;
+  background: none; border: 0; color: var(--muted); cursor: pointer;
+  font: inherit; text-transform: none; letter-spacing: 0;
+}
+button.addopen:hover { color: var(--fg); }
+.addfields {
+  display: flex; flex-direction: column; gap: 0.4rem;
+  padding: 0.75rem 0.9rem; min-height: 8.4rem; justify-content: center;
+}
+.addfields input { margin: 0; }
+
+
+.wstools {
+  display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap;
+  margin: 0.4rem 0 0.7rem;
+}
+.wstools form { margin: 0; }
+/* SAVE SAT 7px LOWER THAN THE BUTTONS BESIDE IT..
+
+   Measured rather than eyeballed: every button in the row is 28px tall and
+   the row centres them, so equal heights should mean equal tops -- and Save
+   read `top: 107` against `100`. The difference was a margin, not the
+   alignment: the generic primary-button rule further down carries a
+   `margin-top` of 0.9rem (14.4px, and the row's centring halves it), which is
+   right for a submit button at the foot of a form and wrong for one in a row
+   of its peers.
+
+   That rule's selector is deliberately not spelled out here. The guard in
+   `test_it_reads_on_both_grounds` finds it with a regular expression that
+   runs to the next `{`, so naming it in prose made the test read this
+   comment and the rule below as one block, and fail. Found by that failure.
+
+   Cleared here rather than there, because that margin is doing its job on
+   every form in the dashboard. */
+.wstools button { margin: 0; }
+button.wsbtn {
+  padding: 0.28rem 0.8rem; border-radius: 999px;
+  border: 1px solid var(--border); background: transparent;
+  color: var(--muted); cursor: pointer;
+  font: 10px/1.7 var(--mono); letter-spacing: 0.09em; text-transform: uppercase;
+}
+button.wsbtn:hover { color: var(--fg); border-color: var(--accent); }
+button.wsbtn.primary {
+  color: var(--accent); border-color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 12%, transparent);
+}
+.wshint { color: var(--muted); font-size: 0.78rem; }
+
+/* While editing, the card is a thing being changed rather than a thing to
+   open. */
+form.editing .cards .cardwrap { border-color: var(--accent); }
+
+/* `hidden` HAS TO WIN, and on a button it did not.
+
+   `button, .btn { ... display: inline-block }` a few hundred lines below
+   overrides the browser's own `[hidden] { display: none }` -- so `Edit
+   names` stayed on screen next to the `Save` that had replaced it, and
+   every JS `hidden = true` on a button in this file was quietly a no-op.
+
+   `!important` rather than moving it below that rule: an important
+   declaration beats a normal one whatever the order, which is the one case
+   in this file where "order decides" does not. It is also the right tool
+   here -- `hidden` is the browser saying an element is not there, and no
+   component style should be able to argue with that. */
+[hidden] { display: none !important; }
+.note {
+  border-left: 2px solid var(--warning);
+  background: color-mix(in srgb, var(--warning) 8%, transparent);
+  padding: 0.55rem 0.75rem; margin: 0.5rem 0; border-radius: var(--radius-sm);
+  color: var(--muted); font-size: 12px;
+}
+.note.bad {
+  border-left-color: var(--critical);
+  background: color-mix(in srgb, var(--critical) 9%, transparent);
+}
+.pill, .chip, .badge {
+  font: 9px/1.5 var(--mono); letter-spacing: 0.06em; padding: 0.05rem 0.35rem;
+  border-radius: var(--radius-sm); border: 1px solid var(--border);
+  color: var(--muted); white-space: nowrap;
+}
+
+/* The queue: three buttons at the foot of Today, and a sheet that rises from
+   the bottom edge when one is pressed.
+
+    That is the whole point of it — a list that is
+   always open costs the height whether or not anyone wants it, and that
+   height is what stopped Today fitting on one screen.
+
+   Reworked 2026-08-24, five things at once:
+
+     1. it rises to two thirds of the screen — a fixed height, so the same
+        press always ends in the same place
+     2. the cross closes it, and so does clicking anywhere outside
+     3. the three buttons TRAVEL WITH IT, sitting on its top edge, rather
+        than being pinned to the bottom of the window while it passes behind
+     4. it was neither wide enough nor centred
+     5. it floats over everything
+
+   (4) had a cause worth writing down. The sheet reserved space on the right
+   for the chat panel whether or not the chat panel was there — and as of the
+   same day the chat starts closed, so that reservation became a permanent
+   250-330px of nothing, which is what made the sheet look both narrow and
+   pushed off to the left. */
+
+/* Everything behind the sheet, dimmed and click-to-close. It is what makes
+   the sheet float rather than merely overlap: without it the rail and the
+   page underneath stay live, and a modal you can type behind is not one. */
+/* THE SHEET USED TO LIVE INSIDE `main`, AND `main` IS A STACKING CONTEXT.
+   `.topbar, main { position: relative; z-index: 1 }` meant every z-index
+   below was measured INSIDE main, so the scrim's 90 competed with main's 1
+   and lost to the rail (20) and the chat tab (15). A "modal" with four live
+   controls sitting on top of its own backdrop.
+
+   The answer then was `body.queueopen main { z-index: 91 }` -- raise main
+   for the duration and the whole layer goes up together.
+
+   IT MOVED OUT OF `main` on 2026-09-04, when the bar became part of every
+   page rather than of Today, and that rule then did the exact opposite of
+   its purpose: main at 91 sat ABOVE the scrim at 90, so the backdrop dimmed
+   the rail and not the page.  -- the content was not lit,
+   everything around it was dimmed and it was not.
+
+   So the rule is gone rather than adjusted. Outside main, the scrim's 90,
+   the sheet's 92 and the bar's 93 are all measured against main's own 1,
+   which is the plain reading they were written for. Measured after: over the
+   page content the topmost element is the scrim, not a form. */
+
+.queuescrim {
+  position: fixed; inset: 0; z-index: 90;
+  background: rgba(0, 0, 0, 0.45);
+  opacity: 0; transition: opacity 0.22s ease;
+}
+body.queueup .queuescrim { opacity: 1; }
+.queuescrim[hidden] { display: none; }
+@media (prefers-reduced-motion: reduce) { .queuescrim { transition: none; } }
+
+/* The three buttons, while the sheet is up: lifted out of the page and set
+   on the sheet's top edge, so pressing one moves the row up with the panel
+   instead of leaving it at the bottom of the window with the panel sliding
+   past behind it. Closed, they travel down by the sheet's height PLUS their
+   own, which is the only offset that clears the viewport completely. */
+/* THE THREE PILLS LIVE AT THE BOTTOM OF THE WINDOW, always.
+
+   They used to sit in the page, a screen and a half down, and only became a
+   fixed bar once the sheet was already open -- which is backwards: the row
+   is how you open the thing, so it is the part that must never need finding.
+
+   The sheet itself is unchanged. When it rises, this rides up on top of it
+   by exactly its height, so the pills stay attached to the panel edge rather
+   than being covered by it. */
+.pilltabs {
+  position: fixed; left: var(--rail-width, 0); right: 0;
+  bottom: 0; z-index: 93;
+  margin: 0 auto; max-width: 72rem; padding: 0.55rem 1rem;
+  background: var(--rail);
+  border: 1px solid var(--border); border-bottom: 0;
+  border-radius: 12px 12px 0 0;
+  box-shadow: 0 -12px 30px color-mix(in srgb, var(--bg) 70%, transparent);
+  transition: transform 0.22s cubic-bezier(0.16, 0.84, 0.44, 1);
+}
+body.queueup .pilltabs {
+  transform: translateY(calc(-1 * var(--sheet-height)));
+}
+.chat-closed .queue { right: 0; }
+@media (prefers-reduced-motion: reduce) {
+  .pilltabs { transition: none; }
+}
+/* Room under the last thing on the page, so the bar never covers it. Scoped
+   with `:has` rather than added to every page: only Today carries the row,
+   and 5rem of empty space at the foot of the others would be a bug of its
+   own. */
+main:has(.pilltabs) { padding-bottom: 5.5rem; }
+
+
+.queue {
+  /* Aligned with the main column, not with the window. Spanning the whole
+     viewport put the panel's left edge under the navigation rail, which is
+     painted over it -- so the first 208px of every line was invisible. */
+  position: fixed; left: var(--rail-width, 0); right: var(--chat-width, 0);
+  bottom: 0; z-index: 92;
+  height: var(--sheet-height);
+  margin: 0 auto; max-width: 72rem;
+  display: flex; flex-direction: column;
+  background: var(--raised); border: 1px solid var(--border);
+  border-top: 2px solid var(--accent); border-bottom: 0;
+  border-radius: 10px 10px 0 0;
+  box-shadow: 0 -18px 50px rgba(0, 0, 0, 0.45);
+  /* It rises.  -- the panel starts below its resting place and moves
+     up into it, and reverses on the way out. `ease-out` on the way in so it
+     arrives settled rather than braking. */
+  transform: translateY(100%);
+  transition: transform 0.22s cubic-bezier(0.16, 0.84, 0.44, 1);
+}
+body.queueup .queue { transform: translateY(0); }
+.queue[hidden] { display: none; }
+
+/* --- a page you have not been let into yet ------------------------------ */
+/* The login page was rendering the entire shell: the navigation rail, the
+   system readout, the chat tab, and the four buttons at the foot of the rail
+   -- Recycle now, End of day, Me time, Stop the dashboard. The server refuses
+   all of them without a session, so nothing could be DONE, but a locked door
+   was displaying the controls behind it and reading out how many items were
+   in the queue.
+   Centring it is
+   the ask; the shell had to go first, because a card centred in the space
+   left over by a rail is not centred on the screen. */
+body.locked .topbar { display: none; }
+body.locked .shell { margin: 0; }
+body.locked main {
+  min-height: 100vh;
+  display: grid; place-items: center;
+  padding: 1.5rem;
+}
+body.locked .card { width: 100%; }
+/* The paragraph under the button was sitting on its bottom edge. `.freshness`
+   is a footnote elsewhere, where something always follows it; here it is the
+   first thing after a control. */
+body.locked .card .freshness { margin-top: 1rem; }
+body.locked .card form + form { margin-top: 1.2rem; }
+body.locked .doorname {
+  font: 500 15px/1.2 var(--sans); letter-spacing: -0.01em;
+  margin: 0 0 1rem; color: var(--fg);
+}
+@media (prefers-reduced-motion: reduce) { .queue { transition: none; } }
+
+.queuehead {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 0.6rem 1rem; border-bottom: 1px solid var(--border);
+  font: 11px/1.6 var(--mono); letter-spacing: 0.1em; text-transform: uppercase;
+  color: var(--muted);
+}
+.queueclose {
+  background: none; border: 0; color: var(--muted); cursor: pointer;
+  font-size: 1.2rem; line-height: 1; padding: 0 0.2rem;
+}
+.queueclose:hover { color: var(--fg); }
+.queuebody { flex: 1; overflow-y: auto; padding: 0.4rem 1rem 1rem; }
+
+.queuerow { border-bottom: 1px solid var(--border); }
+.queuetop {
+  display: block; width: 100%; text-align: left; cursor: pointer;
+  background: none; border: 0; padding: 0.6rem 0.1rem; color: inherit;
+  font: inherit;
+}
+.queuetop:hover { background: var(--field); }
+/* Set explicitly. Without these the rows inherit the display face and its
+   letter-spacing from further up the sheet and come out in capitals, which
+   is right for a section heading and wrong for somebody's question. */
+.queuetop b {
+  display: block; font: 600 0.95rem/1.45 var(--sans);
+  letter-spacing: 0; text-transform: none; color: var(--fg);
+}
+.queuetop span {
+  display: block; color: var(--muted); font: 0.85rem/1.45 var(--sans);
+  letter-spacing: 0; text-transform: none;
+}
+.queuerow.open .queuetop span { display: none; }
+.queuedetail { padding: 0.2rem 0.1rem 0.9rem; }
+.queuedetail[hidden] { display: none; }
+.queuefull { white-space: pre-wrap; line-height: 1.55; margin: 0 0 0.7rem; }
+.queueoptions { display: flex; flex-wrap: wrap; gap: 0.4rem; margin-bottom: 0.7rem; }
+.queueoptions form, .queuedismiss { margin: 0; }
+.queuereply textarea {
+  width: 100%; box-sizing: border-box; font: inherit; padding: 0.5rem 0.6rem;
+  border: 1px solid var(--border); border-radius: var(--radius-sm);
+  background: var(--field); color: var(--fg); resize: vertical;
+}
+.queuerowbuttons { display: flex; gap: 0.4rem; margin-top: 0.5rem; }
+.queuenote { font-size: 0.85rem; color: var(--muted); margin: 0; }
+
+/* A queue with something new in it..
+
+   A count cannot say this on its own -- three has meant three all week, and
+   three where one arrived this morning is a different day. */
+.pilltab { position: relative; }
+.pilltab.fresh { border-color: var(--critical); color: var(--fg); }
+.pilltab .dot {
+  position: absolute; top: -3px; right: -3px;
+  width: 8px; height: 8px; border-radius: 50%;
+  background: var(--critical);
+  box-shadow: 0 0 0 2px var(--bg);
+}
+@media (prefers-reduced-motion: no-preference) {
+  .pilltab.fresh .dot { animation: pulse 1.6s ease-in-out infinite; }
+}
+
+/* One row: id, heading, who and when, and the control that opens it. */
+.queueline {
+  display: flex; align-items: center; gap: 0.6rem;
+  padding: 0.45rem 0.1rem;
+}
+.queueid {
+  flex: 0 0 auto; cursor: pointer; border: 1px solid var(--border);
+  background: var(--field); color: var(--muted);
+  font: 10px/1.6 var(--mono); letter-spacing: 0.04em;
+  padding: 0.1rem 0.4rem; border-radius: var(--radius-sm);
+}
+.queueid:hover { color: var(--accent); border-color: var(--accent); }
+.queueline .queuetop { flex: 1 1 auto; padding: 0; min-width: 0; }
+.queuemeta {
+  flex: 0 0 auto; display: flex; gap: 0.45rem; align-items: center;
+  font: 10.5px/1.6 var(--mono); color: var(--muted); white-space: nowrap;
+}
+.queuewho { color: var(--fg); }
+.queuewho::before { content: "→ "; color: var(--muted); }
+.queuedue.late { color: var(--critical); }
+.queueexpand {
+  flex: 0 0 auto; background: none; border: 1px solid var(--border);
+  color: var(--muted); cursor: pointer; width: 1.4rem; height: 1.4rem;
+  border-radius: var(--radius-sm); line-height: 1;
+}
+.queueexpand:hover { color: var(--accent); border-color: var(--accent); }
+
+/* The pin on an item row. Puts a project on Today. */
+form.pinform { display: inline; margin: 0; }
+button.pin {
+  background: none; border: 0; cursor: pointer; padding: 0 0.15rem;
+  font-size: 0.95rem; line-height: 1; color: var(--muted);
+  vertical-align: baseline;
+}
+button.pin:hover { color: var(--accent); }
+button.pin.on { color: var(--warning); }
+.chip { padding: 0.2rem 0.5rem; background: var(--surface); }
+.chip b { color: var(--fg); font-weight: 600; }
+.chip input { width: auto; display: inline; margin: 0 0.25rem 0 0; }
+.pill.ok, .badge.ok { color: var(--good);
+  border-color: color-mix(in srgb, var(--good) 40%, transparent); }
+.pill.bad, .badge.bad { color: var(--critical);
+  border-color: color-mix(in srgb, var(--critical) 40%, transparent); }
+.pill.warn, .badge.warn { color: var(--warning);
+  border-color: color-mix(in srgb, var(--warning) 40%, transparent); }
+.ok { color: var(--good); } .bad { color: var(--critical); }
+.warn { color: var(--warning); }
+.strip { display: flex; flex-wrap: wrap; gap: 0.3rem; margin-bottom: 0.7rem; }
+
+table {
+  width: 100%; border-collapse: collapse; background: var(--surface);
+  border: 1px solid var(--border); border-radius: var(--radius); overflow: hidden;
+}
+th, td {
+  text-align: left; padding: 0.45rem 0.7rem; vertical-align: top;
+  border-bottom: 1px solid var(--border); font-size: 12px;
+}
+th {
+  font: 600 9px/1.4 var(--mono); letter-spacing: 0.13em;
+  text-transform: uppercase; color: var(--muted); background: var(--raised);
+}
+tr:last-child td { border-bottom: none; }
+tbody tr:hover td { background: color-mix(in srgb, var(--accent) 5%, transparent); }
+td a { color: var(--accent); text-decoration: none; }
+td a:hover { text-decoration: underline; }
+
+.bar {
+  display: block; height: 3px; width: 60px;
+  background: color-mix(in srgb, var(--accent) 15%, transparent);
+  border-radius: 2px; overflow: hidden; margin-bottom: 2px;
+}
+.bar span { display: block; height: 100%; background: var(--accent); }
+.blank { color: var(--muted); font-family: var(--mono); }
+.broken { color: var(--critical); font-weight: 600; cursor: help;
+  font-family: var(--mono); }
+pre {
+  white-space: pre-wrap; word-wrap: break-word; font: 11px/1.55 var(--mono);
+  background: var(--raised); border: 1px solid var(--border);
+  border-radius: var(--radius); padding: 0.65rem; margin: 0.3rem 0;
+  color: var(--muted);
+}
+
+/* --- forms -------------------------------------------------------------- */
+label {
+  display: block; margin: 0.55rem 0;
+  font: 9px/1.5 var(--mono); letter-spacing: 0.1em; text-transform: uppercase;
+  color: var(--muted);
+}
+/* `password` and `email` were missing here, so every secret field on the
+   connections and API-key pages fell back to the browser's default box: a
+   white rectangle in a dark panel. Worth fixing rather than styling one page,
+   because an input that looks foreign is an input people distrust. */
+input[type=text], input:not([type]), input[type=number], input[type=color],
+input[type=password], input[type=email], input[type=url],
+textarea, select {
+  display: block; width: 100%; margin-top: 0.25rem; padding: 0.4rem 0.55rem;
+  font: 12px/1.5 var(--mono); text-transform: none; letter-spacing: 0;
+  color: var(--fg); background: var(--field);
+  border: 1px solid var(--border); border-radius: var(--radius-sm);
+}
+input:focus, textarea:focus, select:focus {
+  outline: none; border-color: var(--accent);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 22%, transparent);
+}
+textarea { resize: vertical; }
+
+
+
+/* Framed like the three buttons above it..
+
+   It sat in a group of four controls as the only bare one, which read as a
+   footnote rather than as the switch that stops the server. The frame is
+   borrowed from `.quick` deliberately — same padding, same radius, same
+   left-aligned full width — so the group reads as four of one thing. What
+   still separates it is the colour, which is the difference that matters. */
+.stopform { margin: 0; }
+/* Named down to the rail on purpose. `.rail .foot .act` sets the padding for
+   every control in this group and outranks a two-class selector, so a frame
+   written as `.stopform .stop` drew a border tight against the text with no
+   room inside it -- which looks like a mistake rather than like the three
+   buttons above. */
+.rail .foot .stopform .stop {
+  width: 100%; text-align: left; cursor: pointer; font: inherit;
+  padding: 0.45rem 0.8rem;
+  border: 1px solid var(--border); background: var(--raised);
+  color: var(--muted); border-radius: var(--radius-sm);
+}
+.rail .foot .stopform .stop:hover {
+  color: var(--error); border-color: var(--error);
+}
+
+/* What the draft checker said, above the buttons that act on the draft. */
+.checked {
+  font: 11px/1.6 var(--mono); color: var(--muted);
+  border-left: 2px solid var(--accent);
+  padding: 0.35rem 0 0.35rem 0.6rem; margin: 0.5rem 0;
+}
+
+/* --- three classes that were written and never styled -------------------- */
+/* All three were in the markup with no rule anywhere, which is invisible in
+   review and looks deliberate in the browser: the element simply inherits and
+   nobody can tell whether it was meant to. */
+
+/* `muted` — a cell that is context rather than content. Used on the source
+   column of the activity table, where every row repeats the same few words
+   and they were competing with the entry itself. */
+.muted { color: var(--muted); }
+
+/* `removes` — the forms that delete a workspace, an item, or an MCP server.
+   They were styled as ordinary forms, so "Remove" looked like "Save". This
+   does not make them shout; it makes the button say which kind it is when
+   somebody is reaching for it. */
+.removes button {
+  color: var(--critical);
+  border-color: color-mix(in srgb, var(--critical) 35%, var(--border));
+}
+.removes button:hover {
+  color: #fff; background: var(--critical); border-color: var(--critical);
+}
+
+/* `wrapped` — a block of preformatted text that must not push the page
+   sideways. Tracebacks and stored output arrive with long lines. */
+.wrapped {
+  white-space: pre-wrap; word-break: break-word; overflow-x: auto;
+  font: 11px/1.6 var(--mono); color: var(--muted);
+  background: var(--field); border: 1px solid var(--border);
+  border-radius: var(--radius-sm); padding: 0.7rem 0.9rem; margin: 0.6rem 0 0;
+  max-height: 22rem;
+}
+
+/* --- the Today page ------------------------------------------------------ */
+.gauges { display: flex; gap: 2.4rem; justify-content: center;
+          padding: 0.6rem 0 1.4rem; flex-wrap: wrap; }
+.gauge { width: 150px; text-align: center; position: relative; }
+.gauge svg { width: 96px; height: 96px; transform: rotate(-90deg); }
+/* `.mark` BELONGS IN THIS LIST. Leaving it out is what showed up as a
+   black blob.
+
+   An SVG <circle> defaults to `fill: black`. The recycle mark is a circle
+   like the other two, so without `fill: none` it painted a black disc across
+   the whole inside of the ring. On the dark ground that is black on
+   near-black and invisible; on the light one it is a black coin with the
+   percentage sitting on it. The stroke was never the problem. */
+.gauge .track, .gauge .fill, .gauge .mark {
+  fill: none; stroke-width: 7; stroke-linecap: round;
+}
+/* THE RING BEHIND THE ARC, and it has to exist on both grounds.
+
+   It was 16% of the accent over whatever was behind it. On the dark ground
+   that is a faint warm circle; on the light one it is very nearly the page,
+   so the meter lost its track and became an orange arc floating with nothing
+   to measure it against -- you could see the fill and not what it was a
+   fraction of.
+
+   Mixed from `--fg` instead of `--accent`: the foreground is dark on the
+   light ground and light on the dark one, so one rule reads on both. */
+.gauge .track { stroke: color-mix(in srgb, var(--fg) 26%, transparent); }
+/* The auto-recycle mark: a short dash straddling the ring rather than a line
+   pointing at it, so it reads as a place ON the scale. Butt caps, because a
+   round cap on a three-unit dash draws a dot a third of the way off the
+   position it is marking. Wider than the track so it is visible whether or
+   not the fill has reached it. */
+.gauge .mark {
+  stroke: var(--fg); stroke-width: 11; stroke-linecap: butt; opacity: 0.75;
+}
+.gauge .fill { stroke: var(--accent); transition: stroke-dasharray 0.4s ease; }
+/* Centred by the box the ring actually occupies, not by a measured offset.
+   `top: 34px` was right at 96px and wrong at every other size -- the meters
+   render at three sizes on this page alone, and the figure sat high in two
+   of them. */
+.gauge .ring { position: relative; display: inline-grid; place-items: center; }
+.gauge .ring svg { display: block; }
+.gauge .middle {
+  position: absolute; inset: 0; display: grid; place-items: center;
+  font: 600 17px/1 var(--sans); letter-spacing: -0.02em;
+}
+.gauge .label { margin-top: 0.35rem; font: 10px/1.3 var(--mono);
+                letter-spacing: 0.12em; text-transform: uppercase;
+                color: var(--muted); }
+.gauge .detail { font: 10px/1.4 var(--mono); color: var(--muted);
+                 opacity: 0.75; margin-top: 0.2rem; }
+
+.strip-row { display: flex; gap: 0.8rem; align-items: stretch;
+             margin-bottom: 1rem; flex-wrap: wrap; }
+.weather {
+  flex: 1 1 22rem; display: flex; align-items: center; gap: 1rem;
+  padding: 0.9rem 1.1rem; border: 1px solid var(--border);
+  border-radius: var(--radius); background: var(--surface);
+}
+.weather .temp { font: 300 40px/1 var(--sans); letter-spacing: -0.03em; }
+.weather .what { display: flex; flex-direction: column; gap: 0.15rem; }
+.weather .what span { color: var(--muted); font-size: 12px; }
+.weather .place { color: var(--accent); font: 10px/1.4 var(--mono);
+                  letter-spacing: 0.1em; text-transform: uppercase; }
+.server {
+  display: flex; flex-direction: column; justify-content: center;
+  gap: 0.2rem; padding: 0.9rem 1.2rem; min-width: 11rem;
+  border: 1px solid var(--border); border-radius: var(--radius);
+  background: var(--surface);
+}
+.server span { color: var(--muted); font-size: 11px; }
+.server .dot { width: 9px; height: 9px; border-radius: 50%;
+               background: var(--good); }
+.server.idle .dot { background: var(--warning); }
+
+.today-cards .cardlabel { font: 10px/1.3 var(--mono); letter-spacing: 0.12em;
+                          text-transform: uppercase; color: var(--muted); }
+.today-cards .cardvalue { font: 300 30px/1.1 var(--sans); margin: 0.2rem 0; }
+.card.warn { border-color: color-mix(in srgb, var(--warning) 40%, var(--border)); }
+
+.section { font: 500 13px/1.2 var(--sans); letter-spacing: 0.02em;
+           margin: 1.8rem 0 0.7rem; }
+.calrow { display: flex; gap: 1rem; align-items: flex-start; flex-wrap: wrap; }
+.month { flex: 0 0 21rem; border: 1px solid var(--border);
+         border-radius: var(--radius); background: var(--surface);
+         padding: 0.7rem 0.8rem 0.9rem; }
+.monthhead { text-align: center; font: 10px/1.3 var(--mono);
+             letter-spacing: 0.14em; text-transform: uppercase;
+             color: var(--muted); margin-bottom: 0.5rem; }
+table.cal { width: 100%; }
+table.cal th { font: 9px/1 var(--mono); color: var(--muted);
+               background: transparent; border: 0; padding: 0.2rem; }
+table.cal td { text-align: center; padding: 0.32rem 0.2rem; border: 0;
+               font: 12px/1.2 var(--sans); position: relative; }
+table.cal td.blank { color: transparent; }
+table.cal td.now { background: var(--accent); color: #07090b;
+                   border-radius: var(--radius-sm); font-weight: 600; }
+table.cal .pip { position: absolute; left: 50%; bottom: 2px; width: 3px;
+                 height: 3px; margin-left: -1.5px; border-radius: 50%;
+                 background: var(--accent); }
+.agenda { flex: 1 1 20rem; }
+.ev { display: flex; gap: 0.9rem; padding: 0.5rem 0;
+      border-bottom: 1px solid var(--border); }
+.ev .when { flex: 0 0 4.5rem; color: var(--accent);
+            font: 11px/1.5 var(--mono); }
+.ev .what { display: flex; flex-direction: column; }
+.ev .on { color: var(--muted); font: 10px/1.4 var(--mono); }
+
+.spark { margin: -0.4rem 0 1.1rem; }
+.spark svg { width: 100%; height: 44px; display: block; }
+.spark rect { fill: color-mix(in srgb, var(--accent) 55%, transparent); }
+.spark rect:last-child { fill: var(--accent); }
+.sparkfoot { display: flex; justify-content: space-between; gap: 1rem;
+             font: 10px/1.4 var(--mono); color: var(--muted); opacity: 0.8; }
+.sparkfoot span:nth-child(2) { text-align: center; }
+
+.versioncard { display: flex; gap: 1.4rem; align-items: center;
+               justify-content: space-between; flex-wrap: wrap; }
+.versioncard .cardvalue { font: 300 26px/1.1 var(--sans); display: block;
+                          margin: 0.15rem 0; }
+.versionact { text-align: right; }
+.versionact p { margin: 0 0 0.5rem; font-size: 12px; color: var(--muted); }
+.versionact .mono { font: 10px/1.5 var(--mono); }
+
+/* --- tabs inside a group ------------------------------------------------ */
+.tabs {
+  display: flex; gap: 0.15rem; padding: 0 1.4rem; flex-wrap: wrap;
+  border-bottom: 1px solid var(--border); background: var(--surface);
+}
+.tabs a {
+  padding: 0.55rem 0.75rem; text-decoration: none; color: var(--muted);
+  font: 10px/1 var(--mono); letter-spacing: 0.11em; text-transform: uppercase;
+  border-bottom: 2px solid transparent; margin-bottom: -1px;
+}
+.tabs a:hover { color: var(--fg); }
+.tabs a.on { color: var(--accent); border-bottom-color: var(--accent); }
+.tabs .n {
+  margin-left: 0.3rem; padding: 0.05rem 0.3rem; border-radius: 999px;
+  background: color-mix(in srgb, var(--accent) 22%, transparent);
+  color: var(--fg); font-size: 9px;
+}
+.rail nav a.settings { margin-top: 0.5rem; border-top: 1px solid var(--border);
+                       padding-top: 0.6rem; }
+
+/* --- the library -------------------------------------------------------- */
+.filters { display: flex; gap: 0.5rem; flex-wrap: wrap; align-items: center;
+           margin-bottom: 0.9rem; }
+.filters input[type=search] { flex: 1 1 14rem; }
+.filters select { flex: 0 0 auto; }
+.chips { display: flex; gap: 0.3rem; flex-wrap: wrap; margin-bottom: 1rem; }
+.chips a {
+  padding: 0.22rem 0.55rem; border-radius: 999px; text-decoration: none;
+  border: 1px solid var(--border); color: var(--muted);
+  font: 10px/1.5 var(--mono); letter-spacing: 0.06em;
+}
+.chips a.on { border-color: var(--accent); color: var(--accent);
+              background: color-mix(in srgb, var(--accent) 10%, transparent); }
+.libitem { display: flex; gap: 0.9rem; align-items: flex-start;
+           padding: 0.65rem 0; border-bottom: 1px solid var(--border); }
+.libitem .who { flex: 1; }
+.libitem .who b { font-weight: 600; }
+.libitem .who a { color: inherit; text-decoration: none; }
+.libitem .who a:hover { color: var(--accent); }
+.libitem .what { display: block; color: var(--muted); font-size: 12px;
+                 margin-top: 0.1rem; }
+.libitem .tags { display: flex; gap: 0.3rem; flex-wrap: wrap;
+                 margin-top: 0.3rem; }
+.libitem .tag { font: 9px/1.6 var(--mono); letter-spacing: 0.08em;
+                text-transform: uppercase; color: var(--muted);
+                border: 1px solid var(--border); border-radius: 3px;
+                padding: 0 0.35rem; }
+.libitem .tag.draft { color: var(--warning);
+                      border-color: color-mix(in srgb, var(--warning) 40%, var(--border)); }
+.libitem form { flex: 0 0 auto; }
+.libitem .state { min-width: 5.5rem; }
+
+/* --- the clock ---------------------------------------------------------- */
+.clock {
+  text-align: center; padding: 0.4rem 0 1.1rem;
+  font-variant-numeric: tabular-nums;
+}
+.clock .time {
+  font: 300 clamp(38px, 7vw, 62px)/1 var(--mono);
+  letter-spacing: 0.04em; color: var(--accent);
+  text-shadow: 0 0 18px color-mix(in srgb, var(--accent) 55%, transparent),
+               0 0 46px color-mix(in srgb, var(--accent) 22%, transparent);
+  display: inline-flex; gap: 0.02em;
+}
+.clock .time .d { display: inline-block; }
+.clock .time .sep { opacity: 0.55; }
+.clock .secs { font-size: 0.45em; opacity: 0.75; margin-left: 0.25em;
+               align-self: flex-end; padding-bottom: 0.35em; }
+.clock .date {
+  margin-top: 0.35rem; font: 10px/1.5 var(--mono); letter-spacing: 0.18em;
+  text-transform: uppercase; color: var(--muted);
+}
+
+/* --- motion, only for people who have not asked it to stop --------------- */
+@media (prefers-reduced-motion: no-preference) {
+  /* Digits flip as they change. */
+  .clock .time .d.flip { animation: flip 0.32s ease; }
+  @keyframes flip {
+    0%   { transform: rotateX(0deg);   opacity: 1; }
+    45%  { transform: rotateX(-90deg); opacity: 0.35; }
+    100% { transform: rotateX(0deg);   opacity: 1; }
+  }
+
+  /* Pages settle in rather than appearing. Short: anything over ~200ms on a
+     page you open fifty times a day becomes a wait. */
+  /* `backwards`, not `both` (2026-08-23).
+
+     With `both` the animation keeps applying after it finishes, and an
+     element that is applying a transform -- even `transform: none` -- becomes
+     the containing block for its `position: fixed` descendants. So the
+     raised queue panel and its button row, both fixed to the bottom of the
+     screen, were being positioned against `main` instead and stopped 166px
+     short of the bottom edge.
+
+     `backwards` still covers the frame before the animation starts, which is
+     the only thing `both` was needed for here. */
+  main { animation: settle 0.18s ease-out backwards; }
+  @keyframes settle {
+    from { opacity: 0; transform: translateY(4px); }
+    to   { opacity: 1; transform: none; }
+  }
+
+  /* Buttons and cards acknowledge the pointer. */
+  button, .act, .card, .chips a, .tabs a, .rail nav a {
+    transition: background 0.14s ease, border-color 0.14s ease,
+                color 0.14s ease, transform 0.1s ease, box-shadow 0.16s ease;
+  }
+  button:hover, .primary:hover {
+    box-shadow: 0 0 0 1px color-mix(in srgb, var(--accent) 45%, transparent),
+                0 0 14px color-mix(in srgb, var(--accent) 22%, transparent);
+  }
+  button:active { transform: translateY(1px); }
+  .card:hover { transform: translateY(-1px);
+                border-color: color-mix(in srgb, var(--accent) 40%, var(--border)); }
+  .gauge .fill { transition: stroke-dasharray 0.7s cubic-bezier(.2,.7,.3,1); }
+  .spark rect { transition: fill 0.2s ease; }
+  .spark:hover rect:last-child {
+    fill: var(--accent);
+    filter: drop-shadow(0 0 6px color-mix(in srgb, var(--accent) 60%, transparent));
+  }
+}
+
+/* Focus always glows, motion or not -- this one is about being able to see
+   where you are, which is not decoration. */
+input:focus, textarea:focus, select:focus, button:focus-visible,
+a:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 1px var(--accent),
+              0 0 12px color-mix(in srgb, var(--accent) 35%, transparent);
+}
+/* --- the leaf ----------------------------------------------------------- */
+/* Painted as the accent colour through the leaf's own alpha, so it is the
+   user's colour rather than the colour somebody drew it in. */
+.shell::before {
+  content: ""; position: fixed; z-index: 0; pointer-events: none;
+  right: calc(var(--chat-width) - 90px); bottom: -90px;
+  width: 620px; height: 620px;
+  background: var(--accent);
+  -webkit-mask: url("/static/leaf-line.png") center / contain no-repeat;
+          mask: url("/static/leaf-line.png") center / contain no-repeat;
+  opacity: 0.10;
+  transition: right 0.12s ease;
+}
+.chat-closed .shell::before { right: -90px; }
+.topbar, main { position: relative; z-index: 1; }
+
+/* The mark itself is artwork, so it is an image rather than a tinted box.
+   Two files: the one drawn for a light ground and the one drawn for a dark
+   one. Which shows is the operating system's day/night setting. */
+.brand .mark { width: 26px; height: 26px; flex: none; position: relative;
+               border: 0; background: none; }
+.brand .mark img { width: 100%; height: 100%; object-fit: contain; display: block; }
+.brand .mark .on-dark { display: block; }
+.brand .mark .on-light { display: none; }
+/* The light mark shows when the page is light — however it got there.
+   `:root.light` is set by the Day/Night switch; the media query covers Auto. */
+:root.light .brand .mark .on-dark { display: none; }
+:root.light .brand .mark .on-light { display: block; }
+@media (prefers-color-scheme: light) {
+  :root:not(.dark) .brand .mark .on-dark { display: none; }
+  :root:not(.dark) .brand .mark .on-light { display: block; }
+}
+
+/* --- the on/off a scheduled task is actually in -------------------------- */
+/* One control carrying one state. reported 2026-08-21: "一係個 installed 嘅
+   button 轉淺色" -- so the off state is the faint one and the on state is
+   filled, and there is nothing else in the row claiming to know better. */
+button.state {
+  min-width: 3.4rem; padding: 0.18rem 0.6rem;
+  border-radius: 999px; border: 1px solid var(--border);
+  background: transparent; color: var(--muted);
+  font: 700 0.66rem/1.5 var(--display);
+  letter-spacing: var(--label-spacing); text-transform: uppercase;
+  cursor: pointer;
+}
+button.state:hover { color: var(--fg); border-color: var(--accent); }
+button.state.on {
+  /* Pulled toward the page ink so it reads on a cream ground as well as a
+     dark one: on a light theme --fg is near-black and this darkens, on a
+     dark theme it lightens. The neighbouring pill can stay pale; this one
+     is the control carrying the state. */
+  color: color-mix(in srgb, var(--good) 62%, var(--fg));
+  border-color: color-mix(in srgb, var(--good) 55%, transparent);
+  background: color-mix(in srgb, var(--good) 15%, transparent);
+}
+button.state.on:hover {
+  color: var(--critical);
+  border-color: color-mix(in srgb, var(--critical) 55%, transparent);
+  background: color-mix(in srgb, var(--critical) 14%, transparent);
+}
+
+/* --- Today: the day on the left, the machine on the right ---------------- */
+/* --- Today: the header strip --------------------------------------------- */
+/* Time, weather and whether anything is running, on one line. They are the
+   day's context, not its content, so they get a strip rather than three
+   panels down the page. */
+/* THREE THINGS, LEFT TO RIGHT, ON ONE LINE.
+
+    -- and the screenshot showed why. This strip was laid out
+   for five things: a clock, the weather, a running dot, and three rings that
+   were told to spread themselves across a full-width row. Four of those are
+   gone. What was left kept the rules written for them, so the one remaining
+   ring dropped onto a line of its own and sat in the middle of an otherwise
+   empty band, with the clock stranded at the far left of the line above.
+
+   Rewritten for what is actually there now: the clock, then the weather,
+   then the ring pinned to the right-hand edge, vertically centred with each
+   other. Nothing spreads, nothing claims a row of its own. */
+.todaybar {
+  /* THREE EQUAL COLUMNS. the maintainer drew it on a screenshot, 2026-09-04: three
+     circles across the strip, the middle one empty, with the note  -- and the empty circle was the point. The clock and the
+     weather were crowded into the left and the ring was pinned to the right,
+     which left a third of the strip doing nothing.
+
+     Equal columns rather than content-sized ones, so the three sit on the
+     same rhythm at every width instead of shuffling as the weather text
+     changes length. Anchored outwards at the edges and centred in the
+     middle: the two ends belong to the frame, the middle one belongs to the
+     gap. */
+  display: grid; grid-template-columns: repeat(3, minmax(0, 1fr));
+  align-items: center; gap: 1.2rem;
+  padding-bottom: 0.9rem; margin-bottom: 1.2rem;
+  border-bottom: 1px solid var(--border);
+}
+.todaybar .clock { margin: 0; text-align: left; justify-self: start; }
+.todaybar .clock .time { font-size: 2.1rem; line-height: 1; }
+.todaybar .clock .time .seconds { font-size: 1rem; }
+.todaybar .clock .date { font-size: 0.62rem; letter-spacing: 0.14em; }
+/* `display: contents` so the weather is a direct flex item of the strip
+   rather than a box inside a box -- it is what lets the ring reach the right
+   edge with `margin-left: auto` from two levels down. */
+.todaybar .strip-row { display: contents; }
+.todaybar .weather {
+  display: flex; align-items: center; gap: 0.7rem;
+  justify-self: center;
+  background: none; border: 0; padding: 0; margin: 0; min-width: 0;
+  /* `.weather` is a card elsewhere and carries `flex: 1 1 22rem` for that
+     job. Inherited into a `nowrap` strip it asks for 352px it cannot have,
+     shrinks below its own text, and the words run into whatever is beside
+     them. reported 2026-09-04: "when the screen is very narrow, the top
+     content become funny". */
+  flex: 0 1 auto;
+}
+.todaybar .weather .sky { width: 46px; height: 46px; flex: 0 0 auto; }
+.todaybar .weather .sky svg { width: 46px; height: 46px; }
+.todaybar .weather .temp { font-size: 1.3rem; }
+/* `min-width: 0` on the column too. A flex item refuses to shrink past its
+   longest word by default, so the fix above stops at the parent unless the
+   text column is also allowed to give. */
+.todaybar .weather .what { font-size: 0.72rem; line-height: 1.35; min-width: 0; }
+
+/* The month and the day it belongs to, side by side.
+
+    It was underneath, which is most of why the calendar block came
+   to 390px on its own. */
+.calrow {
+  display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 1rem 1.4rem; align-items: start;
+}
+@media (max-width: 780px) { .calrow { grid-template-columns: 1fr; } }
+
+/* The quick actions, now in the rail: one under another and full width, so
+   they read as controls rather than as a squeezed row. */
+.foot .quickrow {
+  display: flex; flex-direction: column; gap: 0.3rem; margin: 0.5rem 0;
+}
+.foot .quickrow form { margin: 0; }
+.foot .quickrow .quick { width: 100%; text-align: left; }
+
+.todaytop {
+  display: grid; gap: 1.1rem 1.4rem; margin-bottom: 1.4rem;
+  align-items: start;
+  /* Sized by the space this actually gets, not by the window. The content
+     column is much narrower than the viewport — the chat panel takes the
+     right-hand third — so a viewport media query put these one above the
+     other on a screen that had room for two. */
+  grid-template-columns: repeat(auto-fit, minmax(19rem, 1fr));
+}
+.todaytop .todaycal h2.section:first-child { margin-top: 0; }
+/* The meters were sized for the full page width and now share it. */
+/* The meters were built for the full page width and now share it with the
+   calendar. Narrower, so the three still stand in a row instead of wrapping
+   into two-and-one — which reads as one of them having been added later. */
+.todaybar .gauges {
+  /* The right-hand third, and `justify-self` rather than `margin-left: auto`
+     now that the strip is a grid. The old margin trick was forbidden here
+     while the running dot competed for the same free space; the grid makes
+     the question moot. */
+  margin: 0; padding: 0; gap: 0.9rem; flex-wrap: nowrap;
+  justify-self: end;
+}
+.todaybar .gauge { width: auto; min-width: 0; }
+.todaybar .gauge svg { width: 52px; height: 52px; }
+.todaybar .gauge .middle { font-size: 0.8rem; }
+.todaybar .gauge .label { font-size: 0.54rem; letter-spacing: 0.08em; }
+/* Shown, not hidden.  -- the figure under
+   the ring is the point of the pair, and hiding it here left the bar with a
+   percentage and no idea what it was a percentage of. */
+.todaybar .gauge .detail {
+  display: block; font-size: 0.56rem; margin-top: 0.1rem;
+  white-space: nowrap;
+}
+/* The second line under the ring: how much room is left before the session
+   restarts. It was the accent, which measured 2.8:1 against the light ground
+   -- accent-coloured small text is legible on near-black and is not on
+   near-white. `--fg` is defined per ground and is the strongest text either
+   way, which suits the one number here that changes what somebody does. */
+.todaybar .gauge .recycleat { color: var(--fg); opacity: 0.9; }
+
+.todaymeters .gauges {
+  margin-top: 0.2rem; gap: 0.8rem; padding: 0.4rem 0 1rem; flex-wrap: nowrap;
+}
+.todaymeters .gauge { width: auto; flex: 1 1 0; min-width: 0; }
+.todaymeters .gauge svg { width: 78px; height: 78px; }
+.todaymeters .gauge .detail { font-size: 0.62rem; }
+
+/* THE STRIP ON A NARROW WINDOW.
+
+   Four things on one line is right at 1200px and nonsense at 500: the clock,
+   the weather, the running dot and three meters cannot share 500px without
+   one of them overlapping another or leaving the page. Above, `nowrap` is
+   kept because on a wide screen a wrapped strip reads as an accident.
+
+   Here it wraps on purpose: the clock and the state of the machine on one
+   line, the weather beside them if there is room, and the meters given a
+   line of their own where they can stand apart instead of being squeezed
+   into whatever is left over. */
+@media (max-width: 760px) {
+  /* Below 760 the three columns are still three, just tighter -- the date
+     under the clock is the widest thing in the strip and it is what decides
+     when three stop fitting. Under 560 they do not, and the layout below
+     takes over. */
+  .todaybar { gap: 0.8rem; }
+  .todaybar .clock .time { font-size: 1.75rem; }
+  /* Let the "Set where you are" prompt use two lines rather than push the
+     dot off the row. It only appears when no town is set, which is exactly
+     the state the screenshot was taken in. */
+  .todaybar .weather .fixit { white-space: normal; }
+  .todaybar .server { white-space: normal; margin-left: auto; }
+
+  /* Their own line, spread across it. `flex-basis: 100%` is what forces the
+     break; `space-between` is what stops three small rings from huddling in
+     the middle of an otherwise empty row. */
+  /* THE RING KEEPS THE RIGHT-HAND EDGE, on a phone as on a desktop.
+
+     `flex: 1 0 100%` here was written when three rings had to share a row of
+     their own. With one ring it meant a full-width band containing a single
+     meter, and `space-between` then parked it wherever the flex algebra
+     landed -- which is the "so bad placing" in the maintainer's screenshot.
+
+     Now the clock and the ring share the first line, and only the weather
+     drops beneath them. */
+  .todaybar .gauges { margin: 0; gap: 0.5rem; }
+  .todaybar .gauge svg { width: 46px; height: 46px; }
+  .todaybar .gauge .middle { font-size: 0.72rem; }
+  .todaybar .gauge .detail { white-space: normal; font-size: 0.52rem; }
+
+
+  /* Same crush, one row lower. Three items with `space-between` gives the
+     long middle sentence the whole width and leaves "24 hours ago" and "now"
+     with about forty pixels each, which they spend on three stacked lines
+     apiece. The two ends are the axis labels for the chart above; the
+     sentence is a footnote. So the labels keep the row and the footnote
+     drops beneath them. */
+  .sparkfoot { flex-wrap: wrap; gap: 0.15rem 1rem; }
+  .sparkfoot span:nth-child(1) { order: 1; }
+  .sparkfoot span:nth-child(3) { order: 2; margin-left: auto; }
+  .sparkfoot span:nth-child(2) {
+    order: 3; flex: 1 0 100%; text-align: left; line-height: 1.5;
+  }
+}
+
+/* TWO COLUMNS ON A PHONE, because three do not fit.
+
+   At 560px each of three columns is about 160 wide, and the date under the
+   clock alone is 176. So below that the clock and the weather stack down the
+   left and the ring spans both of their rows on the right -- which keeps the
+   ring beside them rather than on a band of its own, the shape that made the
+   first attempt at this look, in the maintainer's words, "so bad placing". */
+@media (max-width: 560px) {
+  .todaybar {
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: 0.55rem 1rem;
+  }
+  .todaybar .clock { grid-column: 1; grid-row: 1; }
+  .todaybar .weather { grid-column: 1; grid-row: 2; justify-self: start; }
+  .todaybar .gauges { grid-column: 2; grid-row: 1 / span 2; }
+  .todaybar .clock .time { font-size: 1.7rem; }
+}
+
+/* --- Today: the three quick buttons -------------------------------------- */
+.quickrow {
+  display: flex; justify-content: center; gap: 0.6rem; flex-wrap: wrap;
+  margin: -0.2rem 0 1.2rem;
+}
+.quickrow form { margin: 0; }
+button.quick {
+  padding: 0.45rem 1.3rem; font-size: 12px; letter-spacing: 0.08em;
+  border: 1px solid var(--border); background: var(--raised); color: var(--fg);
+  border-radius: var(--radius-sm); cursor: pointer;
+}
+button.quick:hover { border-color: var(--accent); color: var(--accent); }
+/* Me time announces itself. A watching mode you cannot see is one you forget
+   to switch off, and it is the only mode here that makes interruption MORE
+   likely. */
+button.quick.on {
+  background: var(--accent); border-color: var(--accent);
+  color: var(--on-accent); font-weight: 700;
+}
+.freshness.centred { text-align: center; margin: -0.8rem 0 1.2rem; }
+
+/* --- Today: the six projects --------------------------------------------- */
+.favourites {
+  /* Three across, two down — the shape he drew. auto-fill would give four on
+     a wide screen and quietly stop being the row he asked for. */
+  display: grid; gap: 0.8rem; margin-bottom: 1.4rem;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+@media (max-width: 52rem) { .favourites { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+/* Taller, which is what all of the above was for.  */
+.favour { min-height: 8.4rem; justify-content: flex-start; }
+/* The month grid and the day's list sit side by side when there is room and
+   stack when there is not — inside a column that is now half the page. */
+.todaycal .calrow { grid-template-columns: repeat(auto-fit, minmax(15rem, 1fr)); }
+/* THE CARD LOOK BELONGS TO THE CLASS, NOT TO THE ANCHOR.
+
+   It was written as `a.favour` back when a card WAS a link. Wrapping one in a
+   div -- which the arrange arrows needed, since a button inside an anchor
+   navigates instead of submitting -- left every card on Today with no
+   background, no border and no accent spine..
+
+   Second time tonight: the empty card lost its dashed outline the same way,
+   for the same reason. A rule tied to the tag rather than to the thing is a
+   rule that breaks the moment the markup around it changes. */
+.favour {
+  display: flex; flex-direction: column; gap: 0.3rem;
+  padding: 0.75rem 0.9rem; text-decoration: none; color: var(--fg);
+  background: var(--surface); border: 1px solid var(--border);
+  border-left: 3px solid var(--accent); border-radius: 0 var(--radius) var(--radius) 0;
+}
+.favour:hover { border-color: var(--accent); }
+
+/* THE EMPTY CARD..
+
+   Deliberately the same size and rhythm as a real card, and deliberately not
+   the same weight: dashed rather than solid, no accent spine, centred rather
+   than top-aligned. It should read as the shape of a card that is not there
+   yet, not as a card about nothing.
+
+   `a.favour.guess` was here until today -- the faint styling for a slot the
+   machine had filled with its own guess. There are no guesses now. */
+button.favour.addcard {
+  display: flex; flex-direction: column; align-items: center;
+  justify-content: center; gap: 0.4rem;
+  min-height: 8.4rem; padding: 0.75rem 0.9rem;
+  background: transparent; color: var(--muted); cursor: pointer;
+  border: 1px dashed var(--border); border-radius: var(--radius);
+  font: inherit;
+}
+button.favour.addcard:hover:not(:disabled) {
+  border-color: var(--accent); color: var(--fg);
+}
+button.favour.addcard:disabled { cursor: default; opacity: 0.55; }
+button.favour.addcard .plus {
+  font: 300 1.9rem/1 var(--sans); color: var(--accent);
+}
+button.favour.addcard .addsays {
+  font: 400 0.78rem/1.4 var(--sans); letter-spacing: 0.01em;
+}
+
+/* --- the picker the empty card opens ------------------------------------ */
+/* The same three ways out as the queue sheet -- backdrop, Escape, close --
+   because a second modal that behaves differently from the first is two
+   things to learn. */
+.pickscrim {
+  position: fixed; inset: 0; z-index: 120;
+  background: rgba(0, 0, 0, 0.5);
+  opacity: 0; transition: opacity 0.18s ease;
+}
+body.pickup .pickscrim { opacity: 1; }
+.pickscrim[hidden] { display: none; }
+
+.picker {
+  position: fixed; z-index: 121;
+  left: 50%; top: 50%; transform: translate(-50%, -48%) scale(0.98);
+  width: min(28rem, calc(100vw - 2rem)); max-height: min(70vh, 34rem);
+  display: flex; flex-direction: column;
+  background: var(--raised); color: var(--fg);
+  border: 1px solid var(--border); border-top: 2px solid var(--accent);
+  border-radius: var(--radius);
+  box-shadow: 0 24px 60px rgba(0, 0, 0, 0.45);
+  opacity: 0; transition: opacity 0.18s ease, transform 0.18s ease;
+}
+body.pickup .picker { opacity: 1; transform: translate(-50%, -50%) scale(1); }
+.picker[hidden] { display: none; }
+@media (prefers-reduced-motion: reduce) {
+  .pickscrim, .picker { transition: none; }
+}
+
+.pickhead {
+  display: flex; align-items: center; gap: 0.6rem;
+  padding: 0.6rem 0.9rem; border-bottom: 1px solid var(--border);
+  font: 11px/1.6 var(--mono); letter-spacing: 0.1em; text-transform: uppercase;
+  color: var(--muted);
+}
+.pickroom { margin-left: auto; color: var(--accent); }
+.pickbody { overflow-y: auto; padding: 0.5rem 0.6rem 0.8rem; }
+.pickbody form { margin: 0; }
+.pickgroup {
+  padding: 0.7rem 0.3rem 0.3rem;
+  font: 10px/1.6 var(--mono); letter-spacing: 0.12em; text-transform: uppercase;
+  color: var(--muted);
+}
+button.pickrow {
+  display: flex; align-items: center; gap: 0.6rem; width: 100%;
+  padding: 0.5rem 0.6rem; margin-bottom: 0.2rem;
+  background: none; border: 1px solid transparent;
+  border-radius: var(--radius-sm);
+  color: var(--fg); cursor: pointer; text-align: left;
+  font: inherit;
+}
+button.pickrow:hover:not(:disabled) {
+  background: var(--surface); border-color: var(--accent);
+}
+button.pickrow:disabled { cursor: default; color: var(--muted); }
+.picktitle { flex: 1; min-width: 0; }
+.pickadd, .pickon {
+  font: 10px/1.6 var(--mono); letter-spacing: 0.08em; text-transform: uppercase;
+}
+.pickadd { color: var(--accent); }
+.pickon { color: var(--muted); }
+.favourhead { display: flex; align-items: baseline; gap: 0.4rem; flex-wrap: wrap; }
+.favournote { font-size: 0.82rem; color: var(--muted); }
+.favourfoot {
+  display: flex; gap: 0.7rem; flex-wrap: wrap; margin-top: 0.15rem;
+  font: 400 0.72rem/1.5 var(--mono); color: var(--muted);
+}
+.favourfoot .quiet { color: var(--good); }
+.favourfoot .when { margin-left: auto; }
+
+/* --- Today: waiting / action / drafted ----------------------------------- */
+/* Pills over one list, following a panel that already worked. Three columns got
+   a third of the width and every entry wrapped to three lines; one list at
+   full width carries the same information and can be read. The counts live
+   on the pills so an empty tab does not have to be opened to be discovered. */
+.pilltabs {
+  display: flex; gap: 0.4rem; flex-wrap: wrap; margin-bottom: 0;
+  justify-content: center;
+}
+/* SOLID, NOT OUTLINED..
+
+   They were transparent with muted text on a hairline border, which on the
+   light ground is a pale label on a pale page. Filled with `--raised` and
+   written in `--fg`, they read on both grounds.
+
+   AND A ZERO LOOKS DIFFERENT FROM A NUMBER. Three identical pills say
+   nothing about which of them wants you; the one with something behind it
+   takes the accent, so the row can be read at a glance rather than
+   inspected. */
+button.pilltab {
+  display: inline-flex; align-items: center; gap: 0.45rem;
+  padding: 0.45rem 1rem; border-radius: 999px;
+  border: 1px solid var(--border); background: var(--raised);
+  color: var(--fg); cursor: pointer;
+  font: 700 11px/1.4 var(--display); letter-spacing: var(--label-spacing);
+  text-transform: uppercase;
+}
+button.pilltab:hover { border-color: var(--accent); }
+button.pilltab.waiting {
+  background: color-mix(in srgb, var(--accent) 22%, var(--raised));
+  border-color: color-mix(in srgb, var(--accent) 55%, transparent);
+}
+button.pilltab.on {
+  color: var(--on-pale); background: var(--pale); border-color: var(--pale);
+}
+button.pilltab .n {
+  font-family: var(--mono); font-weight: 700;
+  color: var(--muted);
+}
+button.pilltab.waiting .n { color: var(--accent); }
+button.pilltab.on .n { color: var(--on-pale); }
+
+/* ONE ROW ON A PHONE, and this block has to sit AFTER the rules above.
+
+   It was written first and placed with the rest of the bar's positioning,
+   two hundred lines higher. A media query adds no specificity, so every line
+   of it lost to the plain `button.pilltab` rule further down and the pills
+   went on wrapping -- measured as needing 388.8px of 357 both before and
+   after the "fix". base.html has a comment about exactly this trap, and a
+   test for it on the menu button. Third time.
+
+   At 375 the three pills need 389px of 357. The tracking is worth more than
+   the padding here: the labels are 31 characters between them, so a pixel
+   off each one is 20 across the row. */
+@media (max-width: 560px) {
+  .pilltabs { gap: 0.25rem; padding: 0.5rem 0.5rem; }
+  button.pilltab { padding: 0.42rem 0.55rem; letter-spacing: 0.03em; }
+}
+.pillpanes { margin-bottom: 1.6rem; }
+.pillpane[hidden] { display: none; }
+.pillpane .empty { text-align: center; padding: 0.8rem 0; }
+a.colitem {
+  display: flex; flex-direction: column; gap: 0.2rem;
+  padding: 0.55rem 0.75rem; margin-bottom: 0.4rem; text-decoration: none;
+  background: var(--surface); border: 1px solid var(--border);
+  border-radius: var(--radius-sm); color: var(--fg);
+}
+a.colitem:hover { border-color: var(--accent); }
+a.colitem span { font-size: 0.8rem; color: var(--muted); }
+.column .empty { font-size: 0.85rem; }
+
+/* --- in-page tabs -------------------------------------------------------- */
+.subtabs {
+  display: flex; gap: 0.2rem; flex-wrap: wrap;
+  margin: 0 0 1.1rem; border-bottom: 1px solid var(--border);
+}
+a.subtab {
+  text-decoration: none; padding: 0.5rem 0.9rem;
+  font: 700 11px/1.4 var(--display); letter-spacing: var(--label-spacing);
+  text-transform: uppercase; color: var(--muted);
+  border-bottom: 2px solid transparent; margin-bottom: -1px;
+}
+a.subtab:hover { color: var(--fg); }
+a.subtab.on { color: var(--accent); border-bottom-color: var(--accent); }
+
+/* --- the day-by-day log -------------------------------------------------- */
+details.card.day { padding: 0.6rem 0.9rem; }
+details.card.day > summary {
+  cursor: pointer; display: flex; align-items: baseline; gap: 0.6rem;
+  flex-wrap: wrap; color: var(--fg);
+}
+details.card.day > summary::-webkit-details-marker { color: var(--accent); }
+details.card.day pre {
+  margin: 0.6rem 0 0; white-space: pre-wrap; word-break: break-word;
+  font: 400 0.82rem/1.7 var(--mono); color: var(--soft, var(--muted));
+}
+
+/* --- quiet modes --------------------------------------------------------- */
+/* Named .quietmode, not .mode: the rail's day/night buttons already own
+   .mode, and a card matching it inherited `display: flex` from a rule meant
+   for two small buttons -- every field inside laid itself out in a row. The
+   page rendered, and rendered wrong. */
+.modes {
+  display: grid; gap: 0.9rem; margin: 0.8rem 0 1.4rem;
+  grid-template-columns: repeat(auto-fill, minmax(19rem, 1fr));
+}
+.card.quietmode { margin: 0; display: block; }
+.card.quietmode.new { border-style: dashed; }
+.quietmodehead {
+  display: flex; align-items: baseline; gap: 0.5rem; flex-wrap: wrap;
+  margin-bottom: 0.5rem;
+}
+.quietmodehead .sub { flex-basis: 100%; }
+input.quietmodename {
+  font: 700 0.95rem/1.3 var(--display); padding: 0.15rem 0.35rem;
+  background: transparent; border: 0; border-bottom: 1px dashed var(--border);
+  color: var(--fg); width: auto; flex: 1 1 8rem;
+}
+input.quietmodename:focus { border-bottom-color: var(--accent); outline: none; }
+
+/* A task that is not running cannot interrupt anybody, so it is shown but
+   not competing for attention. */
+tr.sleeping td { opacity: 0.5; }
+tr.sleeping select { color: var(--muted); }
+
+/* --- the two ways into the edit panel ------------------------------------ */
+/* A link that has to read as a control, because it sits in a row of them. */
+a.btn {
+  display: inline-block; text-decoration: none;
+  font: 10px/1.5 var(--mono); letter-spacing: 0.1em; text-transform: uppercase;
+  padding: 0.4rem 0.75rem; border: 1px solid var(--border);
+  border-radius: var(--radius-sm); background: var(--surface); color: var(--fg);
+}
+a.btn:hover { border-color: var(--accent); color: var(--accent); }
+td.rowacts { white-space: nowrap; }
+td.rowacts > * { vertical-align: middle; }
+
+/* --- a trigger card ------------------------------------------------------ */
+h3.when {
+  margin: 1.2rem 0 0.5rem; display: flex; align-items: baseline;
+  gap: 0.6rem; flex-wrap: wrap;
+}
+h3.when .sub { font-weight: 400; }
+
+.trigger {
+  border: 1px solid var(--border);
+  border-left: 3px solid var(--accent);
+  border-radius: var(--radius);
+  background: var(--raised);
+  padding: 0.7rem 0.9rem 0.8rem;
+  margin-bottom: 0.6rem;
+}
+.triggerhead {
+  display: flex; justify-content: space-between; align-items: baseline;
+  gap: 1rem; margin-bottom: 0.5rem;
+}
+.trigger .freshness { margin: 0.4rem 0 0; }
+.trigger label { margin-bottom: 0.4rem; }
+.trigger .strip { margin-top: 0.4rem; }
+
+/* "remove" is a word, not a button: it sits inside a card that is itself
+   inside a form, and a second button-shaped thing there reads as the way to
+   submit. */
+button.linklike {
+  background: none; border: 0; padding: 0; cursor: pointer;
+  color: var(--muted); text-transform: none; letter-spacing: 0;
+  font: inherit; font-size: 0.78rem; text-decoration: underline;
+}
+button.linklike:hover { color: var(--critical); }
+
+/* --- the folder picker -------------------------------------------------- */
+.row.tight { display: flex; gap: 0.4rem; align-items: center; }
+.row.tight input,
+.row.tight select { flex: 1; min-width: 0; }
+
+dialog#picker {
+  width: min(34rem, 92vw); border: 1px solid var(--border);
+  border-radius: var(--radius); background: var(--surface); color: var(--fg);
+  padding: 1rem;
+}
+dialog#picker::backdrop { background: rgba(0, 0, 0, .45); }
+.pickerhead {
+  display: flex; justify-content: space-between; align-items: center;
+  margin-bottom: 0.4rem;
+}
+#pickerwhere {
+  font-family: var(--mono); word-break: break-all; margin: 0 0 0.5rem;
+}
+.pickerlist {
+  max-height: 46vh; overflow-y: auto; border: 1px solid var(--border);
+  border-radius: var(--radius-sm); margin-bottom: 0.7rem;
+}
+.pickerrow {
+  display: block; width: 100%; text-align: left; text-transform: none;
+  letter-spacing: 0; background: none; border: 0; color: var(--fg);
+  padding: 0.4rem 0.6rem; cursor: pointer; font: inherit;
+}
+.pickerrow:hover { background: var(--raised, var(--bg)); color: var(--accent); }
+/* A file, in the picker that lists both. Folders carry a marker in their
+   text; a file is the thing you are actually looking for, so it is the one
+   that gets the weight. Without a difference the list reads as one kind of
+   row and you have to click to find out which. */
+.pickerrow.isfile { font-family: var(--mono); font-size: 0.78rem; }
+.pickerrow.isfile:hover { background: var(--accent); color: var(--surface); }
+
+/* The file picker is the same dialog as the folder one, styled by class so
+   that a third picker does not need a third rule. `dialog#picker` above is
+   left as it is -- nothing is moving it, which is the only reason. */
+dialog#filepicker {
+  width: min(34rem, 92vw); border: 1px solid var(--border);
+  border-radius: var(--radius); background: var(--surface); color: var(--fg);
+  padding: 1rem;
+}
+dialog#filepicker::backdrop { background: rgba(0, 0, 0, .45); }
+
+/* --- the task form, as a sheet ------------------------------------------
+ *
+ * A CLASS, not `dialog#taskform`. Three rules tied to a tag broke tonight the
+ * moment their markup changed, and the picker above is written the old way on
+ * purpose -- it is left alone because nothing is moving it, not because it is
+ * the better shape.
+ *
+ * It has to look right in BOTH states. The server opens it with the `open`
+ * attribute so the form works with no script, and script then upgrades it to
+ * a modal; between those two the element is a plain open dialog, which the
+ * browser lays out absolutely and would otherwise drop on top of the table. */
+dialog.sheet {
+  width: min(40rem, 94vw);
+  max-height: 88vh; overflow-y: auto;
+  border: 1px solid var(--border); border-radius: var(--radius);
+  background: var(--surface); color: var(--fg);
+  padding: 1rem 1.1rem 1.2rem;
+  /* Centred whether or not it was upgraded to a modal. */
+  margin: auto;
+}
+dialog.sheet::backdrop { background: rgba(0, 0, 0, .5); }
+.sheethead {
+  display: flex; justify-content: space-between; align-items: center;
+  gap: 1rem; margin-bottom: 0.6rem;
+  padding-bottom: 0.6rem; border-bottom: 1px solid var(--border);
+}
+.sheethead b { font-size: 0.95rem; }
+dialog.sheet h3.when { margin-top: 1rem; }
+dialog.sheet .freshness { margin: 0.35rem 0 0.7rem; }
+
+/* The reach-me tick. A checkbox that owns its whole line, because it is a
+   question in its own right and not a modifier on the field above it. */
+.tickline {
+  display: flex; align-items: center; gap: 0.5rem;
+  margin: 1rem 0 0.2rem; font-weight: 600;
+}
+.tickline input { width: auto; display: inline; margin: 0; }
+
+/* Hidden groups on the Event tab. `[hidden]` is already forced elsewhere in
+   this file, but these are divs and labels rather than buttons, so this is
+   only here to keep the spacing from collapsing oddly when one is shown. */
+.eventfields { margin-bottom: 0.2rem; }
+
+/* --- a list where the detail is behind a press --------------------------
+ *
+ * Skills and specialists were four-column tables with a whole edit form
+ * folded into every second row. A `<details>` rather than script, so the
+ * detail still opens with JavaScript off -- the same reason the forms are
+ * dialogs the address opens. */
+.stack { display: flex; flex-direction: column; gap: 0.5rem; }
+.rowitem {
+  border: 1px solid var(--border); border-radius: var(--radius);
+  background: var(--surface); padding: 0.6rem 0.8rem;
+}
+.rowhead {
+  display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap;
+}
+/* The actions go to the far end, so the eye runs down a column of names
+   rather than down names of varying length with buttons hanging off them. */
+.rowhead .rowacts { margin-left: auto; margin-top: 0; }
+.rowhead b { font-size: 0.95rem; }
+
+.rowmore { margin-top: 0.15rem; }
+.rowmore summary {
+  cursor: pointer; color: var(--muted); font-size: 0.78rem;
+  text-transform: uppercase; letter-spacing: 0.06em;
+}
+.rowmore[open] summary { color: var(--fg); margin-bottom: 0.4rem; }
+.rowmore .freshness { margin: 0.3rem 0; }
+
+/* The instructions, shown as written. `pre` because a skill body is
+   markdown with its own line breaks, and reflowing it makes a checklist
+   read as a paragraph. It scrolls sideways inside itself rather than
+   pushing the page wide. */
+.rowbody {
+  font-family: var(--mono); font-size: 0.78rem; line-height: 1.5;
+  white-space: pre-wrap; word-break: break-word;
+  max-height: 22rem; overflow: auto;
+  background: var(--bg); border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 0.6rem 0.7rem; margin: 0.4rem 0 0;
+}
+
+/* --- the theme picker's specimens --------------------------------------- */
+/* The card is a <button>, and the global button rule uppercases everything
+   inside it. On this page that destroyed the whole point: in capitals a
+   serif and a sans look nearly identical, so five specimens claiming to
+   differ in typeface looked the same. Sentence case, and the theme's own
+   line-height, or the preview is not a preview. */
+.themecard button,
+.themecard button * {
+  text-transform: none;
+  letter-spacing: normal;
+}
+.themecard button { font: inherit; }
+.themefeel, .themename .badge {
+  text-transform: uppercase !important;
+  letter-spacing: .07em !important;
+}
+
+.themes {
+  display: grid; gap: 0.9rem; margin-top: 1rem;
+  grid-template-columns: repeat(auto-fill, minmax(15rem, 1fr));
+}
+.themecard { margin: 0; }
+.themecard button {
+  width: 100%; text-align: left; padding: 0; overflow: hidden;
+  background: var(--surface); border: 1px solid var(--border);
+  border-radius: var(--radius); cursor: pointer; color: var(--fg);
+  display: flex; flex-direction: column; gap: 0;
+}
+.themecard button:hover { border-color: var(--accent); }
+.themecard.on button {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 1px var(--accent);
+}
+
+/* The preview paints itself in the theme it is offering, using its own
+   tokens rather than the page's — otherwise every card would look like
+   whatever is already selected, which tells you nothing. */
+.specimen {
+  display: block; padding: 0.9rem 1rem 1rem;
+  background: var(--s-ground, var(--surface));
+  color: var(--s-ink, var(--fg));
+  border-bottom: var(--s-hair, 1px) solid
+    color-mix(in srgb, var(--s-ink, var(--fg)) 18%, transparent);
+}
+.specimen .s-title {
+  display: block; font-size: 1.15rem; font-weight: 600; margin-bottom: 0.15rem;
+}
+.specimen .s-body { display: block; font-size: 0.82rem; opacity: .78; }
+.specimen .s-num {
+  display: inline-block; margin-top: 0.5rem; font-size: 1.1rem;
+  color: var(--s-accent, var(--accent)); letter-spacing: -0.01em;
+}
+.specimen .s-chip {
+  display: inline-block; margin-left: 0.5rem; padding: 0.1rem 0.45rem;
+  font-size: 0.62rem; text-transform: uppercase; letter-spacing: .08em;
+  border-radius: var(--s-radius, var(--radius-sm));
+  box-shadow: var(--s-shadow, none);
+  background: color-mix(in srgb, var(--s-accent, var(--accent)) 18%, transparent);
+  color: var(--s-accent, var(--accent));
+  border: var(--s-hair, 1px) solid
+    color-mix(in srgb, var(--s-accent, var(--accent)) 45%, transparent);
+}
+.themename {
+  display: flex; align-items: center; gap: 0.4rem; flex-wrap: wrap;
+  padding: 0.7rem 1rem 0.1rem;
+}
+.themefeel {
+  display: block; padding: 0 1rem; font-family: var(--mono);
+  font-size: 0.68rem; letter-spacing: .06em; color: var(--muted);
+  text-transform: uppercase;
+}
+.themecard .sub { display: block; padding: 0.35rem 1rem 0.9rem; }
+
+/* the rail's Theme link sits with the two mode buttons */
+a.modebtn { text-decoration: none; }
+
+/* --- day / night switch (bottom of the rail) ---------------------------- */
+.mode {
+  display: flex; gap: 0.25rem; padding: 0.5rem 0.75rem 0.35rem;
+  border-top: 1px solid var(--border);
+}
+.modebtn {
+  flex: 1; display: flex; flex-direction: column; align-items: center;
+  gap: 0.15rem; padding: 0.35rem 0.2rem; font-size: 10px; letter-spacing: .04em;
+  background: none; border: 1px solid transparent; border-radius: var(--radius-sm);
+  color: var(--muted); cursor: pointer;
+}
+.modebtn svg { width: 15px; height: 15px; fill: none; stroke: currentColor;
+               stroke-width: 1.7; stroke-linecap: round; }
+.modebtn:hover { color: var(--fg); border-color: var(--border); }
+/* The selected one. The raw accent is a mid tone by design, so at 10px on a
+   pale ground it measured 3.68:1 -- the one control that is supposed to tell
+   you which mode you are in was the hardest to read. Mixed toward the page
+   ink, which darkens it on a light ground and lightens it on a dark one. */
+.modebtn.on { color: color-mix(in srgb, var(--accent) 62%, var(--fg));
+              border-color: var(--accent);
+              background: color-mix(in srgb, var(--accent) 12%, transparent); }
+
+/* --- the stop button, said in the right voice --------------------------- */
+.act.stop.loud {
+  font-size: 13px; font-weight: 600; letter-spacing: .01em;
+  /* #ff5a5a was chosen against the dark ground and measured 2.4:1 on
+     the light one. `--critical` is defined per ground, so it stays red
+     without staying invisible. */
+  color: var(--critical); margin-top: 0.5rem;
+}
+.act.stop.loud:hover { color: #fff; background: #d63b3b; border-color: #d63b3b; }
+
+/* --- Recycle now, centred, red only when reached for -------------------- */
+.metertools { display: flex; justify-content: center; margin: -0.2rem 0 1.4rem; }
+.metertools .recycle {
+  padding: 0.4rem 1.4rem; font-size: 13px; border-radius: var(--radius-sm);
+  border: 1px solid var(--border); background: var(--raised); color: var(--fg);
+  cursor: pointer; transition: background .15s, color .15s, border-color .15s;
+}
+.metertools .recycle:hover {
+  background: #d63b3b; border-color: #d63b3b; color: #fff;
+}
+
+/* --- weather glyph: drawn, coloured by the sky, and moving --------------- */
+/*  and.
+
+   Every colour below is a CSS custom property set per condition, so a shape
+   is drawn once and lit differently for day and for night. That is the part
+   a generated picture could not do: the same cloud has to sit under a blue
+   afternoon and a dark evening without being redrawn. */
+.weather .sky svg {
+  width: 54px; height: 54px; fill: none; stroke-width: 2;
+  stroke-linecap: round; stroke-linejoin: round;
+  overflow: visible;
+}
+/* Component-scoped, and every use below carries a fallback. They are not
+   theme tokens and do not belong on `:root` -- the guard that checks every
+   `var()` resolves on the default ground accepts a fallback for exactly
+   this case. */
+.weather .sky { --sky: var(--muted); --sky-dim: var(--muted); }
+.weather .sky svg { stroke: var(--sky, currentColor); }
+
+/* Day and night are two different palettes for the same six shapes. */
+.weather .sky.sun.day   { --sky: #e5a83a; --sky-dim: #c98f2c; }
+/* Mid-tones for night, not pale ones. These were picked against the dark
+   ground and #cbd6e6 on a cream page is very nearly the page -- the same
+   mistake as the gauge track, one element over. A mid-tone reads on both. */
+.weather .sky.sun.night { --sky: #7d8ea8; --sky-dim: #66768e; }
+.weather .sky.rain      { --sky: #6f9bc4; --sky-dim: #4d7ba6; }
+.weather .sky.rain.night  { --sky: #5c82a6; --sky-dim: #3f6a8f; }
+.weather .sky.snow      { --sky: #9dc4dc; --sky-dim: #7ba6c2; }
+.weather .sky.storm     { --sky: var(--accent); --sky-dim: var(--accent); }
+.weather .sky.cloud.day { --sky: #9fb0bb; --sky-dim: #7d8d99; }
+.weather .sky.cloud.night { --sky: #74838f; --sky-dim: #5f6b77; }
+.weather .sky.fog       { --sky: var(--muted); --sky-dim: var(--muted); }
+
+/* The sun: rays turning slowly, core breathing. Slow on purpose -- a fast
+   spin on a page somebody keeps open all day is a page they close. */
+.weather .sky .rays {
+  transform-origin: 32px 32px;
+  animation: skyspin 26s linear infinite;
+}
+.weather .sky .core { animation: skybreathe 5s ease-in-out infinite; }
+@keyframes skyspin { to { transform: rotate(360deg); } }
+@keyframes skybreathe { 50% { opacity: 0.72; } }
+
+/* The night sky: three stars, out of step so they do not blink as one. */
+.weather .sky .stars circle { fill: var(--sky, currentColor); stroke: none; }
+.weather .sky .stars circle:nth-child(1) { animation: skytwinkle 3.2s ease-in-out infinite; }
+.weather .sky .stars circle:nth-child(2) { animation: skytwinkle 4.1s ease-in-out infinite 0.6s; }
+.weather .sky .stars circle:nth-child(3) { animation: skytwinkle 2.7s ease-in-out infinite 1.3s; }
+@keyframes skytwinkle { 0%, 100% { opacity: 0.35; } 50% { opacity: 1; } }
+
+/* A cloud drifts. Two pixels, not ten: it should read as weather rather
+   than as something sliding off the page. */
+.weather .sky .cloud { animation: skydrift 9s ease-in-out infinite; }
+.weather .sky .behind { stroke: var(--sky-dim, currentColor); }
+@keyframes skydrift {
+  0%, 100% { transform: translateX(0); }
+  50%      { transform: translateX(2px); }
+}
+
+/* Rain and snow fall, each drop on its own beat -- in step they look like a
+   comb moving down rather than like weather. */
+.weather .sky .drops line { stroke: var(--sky-dim, currentColor); }
+.weather .sky .drops .d1 { animation: skyfall 1.1s linear infinite; }
+.weather .sky .drops .d2 { animation: skyfall 1.1s linear infinite 0.35s; }
+.weather .sky .drops .d3 { animation: skyfall 1.1s linear infinite 0.7s; }
+@keyframes skyfall {
+  0%   { opacity: 0; transform: translateY(-5px); }
+  25%  { opacity: 1; }
+  100% { opacity: 0; transform: translateY(7px); }
+}
+
+.weather .sky .flakes g { stroke: var(--sky-dim, currentColor); }
+.weather .sky .flakes g g { transform-box: fill-box; transform-origin: center; }
+.weather .sky .flakes .f1 { animation: skydown 3.4s linear infinite; }
+.weather .sky .flakes .f2 { animation: skydown 3.4s linear infinite 1.1s; }
+.weather .sky .flakes .f3 { animation: skydown 3.4s linear infinite 2.2s; }
+@keyframes skydown {
+  0%   { opacity: 0; transform: translateY(-6px) rotate(0deg); }
+  20%  { opacity: 1; }
+  100% { opacity: 0; transform: translateY(8px) rotate(180deg); }
+}
+
+/* The bolt flashes rather than fades: mostly dark, brief and bright. */
+.weather .sky .bolt {
+  stroke: var(--accent); stroke-width: 2.4;
+  animation: skyflash 2.6s steps(1, end) infinite;
+}
+@keyframes skyflash {
+  0%, 8%, 16%, 100% { opacity: 1; }
+  4%, 12%           { opacity: 0.15; }
+  20%               { opacity: 0.5; }
+}
+
+/* Haze: three bars sliding past each other, which is the only way three
+   straight lines say "fog" rather than "menu". */
+.weather .sky .haze .h1 { animation: skyhaze 7s ease-in-out infinite; }
+.weather .sky .haze .h2 { animation: skyhaze 7s ease-in-out infinite 1.4s; }
+.weather .sky .haze .h3 { animation: skyhaze 7s ease-in-out infinite 2.8s; }
+@keyframes skyhaze {
+  0%, 100% { transform: translateX(-2px); opacity: 0.55; }
+  50%      { transform: translateX(3px); opacity: 1; }
+}
+
+/* Nothing moves for somebody who asked for that. */
+@media (prefers-reduced-motion: reduce) {
+  .weather .sky * { animation: none !important; }
+}
+
+/* What to do about it, when there is something to do. */
+.weather .tip { color: var(--accent); font-size: 0.78rem; }
+
+/* --- calendar you can walk through -------------------------------------- */
+.monthhead { display: flex; align-items: center; gap: 0.4rem; }
+.monthhead .mname { flex: 1; text-align: center; }
+.monthhead .step {
+  padding: 0 0.4rem; text-decoration: none; color: var(--accent);
+  border-radius: var(--radius-sm); font-size: 15px; line-height: 1.2;
+}
+.monthhead .step:hover { background: color-mix(in srgb, var(--accent) 16%, transparent); }
+.monthhead .step.done { color: var(--border); cursor: default; }
+.cal td a {
+  display: block; text-decoration: none; color: inherit;
+  padding: 0.15rem 0; border-radius: var(--radius-sm);
+}
+.cal td a:hover { background: color-mix(in srgb, var(--accent) 14%, transparent); }
+.cal td.picked a {
+  background: var(--accent); color: #fff; font-weight: 600;
+}
+.cal td.picked .pip { background: #fff; }
+.backtoday {
+  display: block; text-align: center; margin-top: 0.4rem;
+  font-size: 11px; color: var(--muted);
+}
+.agendahead {
+  font-weight: 600; margin-bottom: 0.5rem; padding-bottom: 0.35rem;
+  border-bottom: 1px solid var(--border);
+}
+
+/* --- back link, drag handles, and the small +/- panels ------------------- */
+.topbar .back {
+  display: inline-flex; align-items: center; gap: 0.35rem;
+  margin-right: 0.7rem; padding: 0.2rem 0.55rem;
+  border: 1px solid var(--border); border-radius: var(--radius-sm);
+  color: var(--muted); text-decoration: none; font-size: 12px;
+}
+.topbar .back:hover { color: var(--fg); border-color: var(--accent); }
+
+/* Thin, invisible until hovered, and wider than it looks -- a 1px target is
+   a target nobody hits. */
+.grip {
+  position: fixed; top: 0; bottom: 0; width: 7px; z-index: 30;
+  cursor: col-resize; background: transparent;
+}
+.grip:hover, .grip.dragging {
+  background: color-mix(in srgb, var(--accent) 35%, transparent);
+}
+.grip.left  { left: calc(var(--rail-width) - 3px); }
+.grip.right { right: calc(var(--chat-width) - 3px); }
+.chat-closed .grip.right { display: none; }
+body.dragging { user-select: none; cursor: col-resize; }
+
+.rowtools { display: flex; gap: 0.5rem; margin: 1rem 0 0; flex-wrap: wrap; }
+.rowtools details {
+  border: 1px solid var(--border); border-radius: var(--radius);
+  background: var(--surface); padding: 0.35rem 0.6rem; min-width: 15rem;
+}
+.rowtools summary { cursor: pointer; color: var(--muted); font-size: 12px; }
+.rowtools details[open] summary { color: var(--fg); margin-bottom: 0.5rem; }
+.rowtools form { display: flex; flex-direction: column; gap: 0.4rem; }
+.rowtools .hint { color: var(--muted); font-size: 11px; line-height: 1.4; }
+.said {
+  margin: 0.8rem 0; padding: 0.5rem 0.7rem; border-radius: var(--radius);
+  background: color-mix(in srgb, var(--good) 10%, transparent);
+  border: 1px solid color-mix(in srgb, var(--good) 30%, transparent);
+}
+
+button, .btn {
+  font: 10px/1.5 var(--mono); letter-spacing: 0.1em; text-transform: uppercase;
+  padding: 0.4rem 0.75rem; cursor: pointer; display: inline-block;
+  color: var(--muted); background: transparent;
+  border: 1px solid var(--border); border-radius: var(--radius-sm);
+  text-decoration: none;
+}
+button:hover, .btn:hover {
+  color: var(--accent);
+  border-color: color-mix(in srgb, var(--accent) 50%, transparent);
+  background: color-mix(in srgb, var(--accent) 8%, transparent);
+}
+button.primary, .btn.primary {
+  /* The text belongs to the fill, not to a guess about the ground. Both are
+     defined together above, so flipping one without the other is no longer
+     possible. */
+  color: var(--on-pale); background: var(--pale); border-color: var(--pale);
+  font-weight: 700; margin-top: 0.9rem;
+}
+button.primary:hover, .btn.primary:hover {
+  filter: brightness(1.12);
+}
+form.inline { display: inline-block; margin: 0 0.15rem 0.15rem 0; }
+.row { display: flex; gap: 0.7rem; flex-wrap: wrap; }
+.row label { flex: 1 1 110px; }
+/* A checkbox label was inheriting the 110px growth meant for text fields and
+   drew a box five lines tall around one word. */
+.row label:has(> input[type=checkbox]) { flex: 0 0 auto; }
+details summary {
+  cursor: pointer; padding: 0.25rem 0; color: var(--muted);
+  font: 10px/1.5 var(--mono); letter-spacing: 0.08em; text-transform: uppercase;
+}
+
+/* --- chat turns (used in the panel and on the full page) ---------------- */
+.chat { display: flex; flex-direction: column; gap: 0.35rem; }
+.daymark {
+  text-align: center; font: 9px/1 var(--mono); color: var(--muted);
+  margin: 0.8rem 0 0.3rem; text-transform: uppercase; letter-spacing: 0.14em;
+}
+.turn { display: flex; flex-direction: column; gap: 0.1rem; max-width: 88%; }
+.turn.from-user { margin-left: auto; align-items: flex-end; }
+.bubble {
+  padding: 0.4rem 0.6rem; border-radius: var(--radius);
+  border: 1px solid var(--border); background: var(--surface);
+  font-size: 12px; white-space: pre-wrap; word-break: break-word;
+}
+.turn.from-user .bubble {
+  background: color-mix(in srgb, var(--accent) 14%, transparent);
+  border-color: color-mix(in srgb, var(--accent) 38%, transparent);
+}
+.turn.held .bubble { border-style: dashed; opacity: 0.7; }
+.meta {
+  font: 9px/1.5 var(--mono); color: var(--muted); letter-spacing: 0.04em;
+}
+.composer { display: flex; gap: 0.4rem; align-items: flex-end; margin-top: 0.8rem; }
+.composer textarea { margin: 0; }
+
+
+/* The ☰ that reveals the rail on a phone. Hidden above 980px, where the rail
+   is a column that is already visible and a button for it would be noise. */
+.railbtn {
+  display: none; align-items: center; justify-content: center;
+  width: 2.1rem; height: 2.1rem; margin-right: 0.55rem;
+  border: 1px solid var(--border); border-radius: var(--radius-sm);
+  background: var(--surface); color: var(--fg); cursor: pointer;
+  font-size: 1rem; line-height: 1; flex: 0 0 auto;
+}
+.railbtn:hover { background: var(--raised); }
+
+/* --- Settings: a town, or wherever this computer is ---------------------- */
+/* Only the chosen half is shown. Leaving both editable is how somebody types
+   a town, presses the button, and cannot tell which of the two the page is
+   going to keep. */
+.wherepick { display: grid; gap: 0.35rem; }
+.wherehead {
+  font: 11px/1.6 var(--mono); letter-spacing: 0.1em; text-transform: uppercase;
+  color: var(--muted);
+}
+.wherepick .pick {
+  display: flex; align-items: center; gap: 0.45rem;
+  margin: 0; font-size: 0.85rem; cursor: pointer;
+}
+.wherepick .pick input { width: auto; margin: 0; }
+.wherepick .wheretown { margin: 0.35rem 0 0; }
+.wherepick .wherehere { display: none; margin-top: 0.35rem; }
+.wherepick.is-here .wheretown { display: none; }
+.wherepick.is-here .wherehere { display: block; }
+.wherepick .wherehere .sub { display: block; }
+
+/* --- History: two things you browse, not two things you scroll ---------- */
+/* The picker on the left, what you picked on the right -- the same shape for
+   the calendar and for the timeline, so moving between the two tabs does not
+   feel like moving between two pages. `.calrow` already draws that pair for
+   Today's calendar and its agenda; this is the right-hand half of it. */
+.daydetail { min-width: 0; }
+.daydetail .agendahead {
+  display: flex; align-items: center; gap: 0.6rem; flex-wrap: wrap;
+}
+/* Pushed to the far end of the heading rather than placed after the tag, so
+   it stays in the same spot whatever the heading says. */
+.closedetail {
+  margin-left: auto; color: var(--muted); text-decoration: none;
+  font-size: 1.15rem; line-height: 1; padding: 0 0.25rem;
+}
+.closedetail:hover { color: var(--fg); }
+.daydetail pre.plain {
+  max-height: 62vh; overflow: auto;
+  padding: 0.2rem 0 0; margin: 0.6rem 0 0;
+}
+
+/* System or by hand. the maintainer asked for the two to be told apart at a glance
+   («用tag分類»), which is a colour and a word, not a second list. */
+.freshness.underneath { margin-top: 1.6rem; padding-top: 0.9rem;
+                        border-top: 1px solid var(--border); }
+/* The two that moved off this page, kept reachable at the foot of it.
+   The links needed a colour: unstyled, they came out as the browser's
+   default blue, which on this palette reads as a rendering fault. */
+.freshness.underneath {
+  margin-top: 1.6rem; padding-top: 0.9rem;
+  border-top: 1px solid var(--border);
+}
+.freshness.underneath a { color: var(--accent); text-decoration: none; }
+.freshness.underneath a:hover { text-decoration: underline; }
+
+/* What was written that day, and what merely happened. */
+.entry + .entry { margin-top: 1.1rem; }
+.entryhead {
+  display: flex; align-items: baseline; gap: 0.5rem;
+  font: 11px/1.6 var(--mono); letter-spacing: 0.1em; text-transform: uppercase;
+  color: var(--muted);
+}
+.entryhead .when { color: var(--accent); }
+.entry pre.plain { margin-top: 0.35rem; }
+
+.alsothatday { margin-top: 1.1rem; }
+.alsothatday summary {
+  cursor: pointer; color: var(--muted);
+  font: 11px/1.6 var(--mono); letter-spacing: 0.08em; text-transform: uppercase;
+}
+.alsothatday summary:hover { color: var(--fg); }
+.alsothatday summary .n { color: var(--accent); }
+.alsothatday ul {
+  margin: 0.5rem 0 0; padding-left: 1.1rem;
+  max-height: 24rem; overflow-y: auto;
+}
+.alsothatday li {
+  color: var(--muted); font-size: 0.8rem; line-height: 1.6;
+  padding: 0.05rem 0;
+}
+
+.tagrow { display: flex; gap: 0.4rem; margin: 0 0 0.9rem; flex-wrap: wrap; }
+.tag {
+  display: inline-flex; align-items: center; gap: 0.35rem;
+  padding: 0.12rem 0.5rem; border-radius: 999px;
+  border: 1px solid var(--border); background: var(--surface);
+  font: 10px/1.7 var(--mono); letter-spacing: 0.08em; text-transform: uppercase;
+  color: var(--muted); text-decoration: none; white-space: nowrap;
+}
+a.tag:hover { color: var(--fg); border-color: var(--accent); }
+.tag.on { color: var(--fg); border-color: var(--accent); background: var(--raised); }
+.tag .n { color: var(--accent); font-weight: 600; }
+/* The kind, where it is a label rather than a filter. Manual takes the
+   accent because it is the rarer of the two and the one somebody is usually
+   looking for -- a machine handover happens on its own; a person only saves
+   one deliberately. */
+.tag.manual { color: var(--accent); border-color: color-mix(in srgb, var(--accent) 45%, transparent); }
+.tag.system { opacity: 0.8; }
+
+.timeline { list-style: none; margin: 0; padding: 0 0 0 0.9rem; min-width: 0; }
+/* One line down the left, drawn by the list rather than by each row, so it
+   is continuous instead of a stack of touching segments. */
+.timeline { border-left: 1px solid var(--border); }
+.timeline li { position: relative; }
+.timeline li::before {
+  content: ""; position: absolute; left: -1.24rem; top: 0.95rem;
+  width: 7px; height: 7px; border-radius: 50%;
+  background: var(--border);
+}
+.timeline li.on::before { background: var(--accent); }
+.timeline a {
+  display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap;
+  padding: 0.5rem 0.6rem; margin-left: 0.4rem;
+  border-radius: var(--radius-sm); color: var(--fg); text-decoration: none;
+}
+.timeline a:hover { background: var(--surface); }
+.timeline li.on a { background: var(--raised); }
+.timeline .when { font: 11px/1.5 var(--mono); letter-spacing: 0.04em; }
+.timeline .why { color: var(--muted); font-size: 0.78rem; }
+@media (max-width: 760px) {
+  /* The pair becomes one column at 780px (`.calrow`), so the list would
+     otherwise keep a scroll height sized for a column beside something. */
+  .timeline { max-height: 18rem; overflow-y: auto; }
+}
+
+/* --- a button that takes a minute -------------------------------------- */
+/*
+   The description was accurate. `End of day` posts a form and the
+   request does not come back until a headless model run has finished writing
+   the day up -- a minute, sometimes two. Nothing on the page said so, so the
+   only signal was the browser's own spinner in a tab he was not looking at,
+   and the button appeared to do nothing at all. A second press then queues a
+   second run of the same job.
+
+   The overlay is not decoration: it is the only thing between "this takes a
+   minute" and "this is broken". It says what is running, and what will
+   happen when it finishes, because the answer arrives on his phone rather
+   than on this page. */
+.working {
+  position: fixed; inset: 0; z-index: 200;
+  display: grid; place-items: center;
+  /* Translucent, as asked -- the page stays visible behind it, so it reads
+     as the dashboard being busy rather than as a new screen. */
+  background: color-mix(in srgb, var(--bg) 74%, transparent);
+  backdrop-filter: blur(2px);
+  opacity: 0; transition: opacity 0.18s ease;
+}
+.working[hidden] { display: none; }
+.working.up { opacity: 1; }
+.workingcard {
+  max-width: 23rem; margin: 1.2rem; padding: 1.3rem 1.5rem;
+  background: var(--raised); border: 1px solid var(--border);
+  border-top: 2px solid var(--accent); border-radius: var(--radius);
+  box-shadow: 0 18px 50px rgba(0, 0, 0, 0.45); text-align: center;
+}
+.workingwhat { margin: 0.75rem 0 0.35rem; font: 500 15px/1.35 var(--sans); }
+.workingnote {
+  margin: 0; font-size: 0.82rem; line-height: 1.55; color: var(--muted);
+}
+.workingdots { display: flex; gap: 0.35rem; justify-content: center; }
+.workingdots span {
+  width: 7px; height: 7px; border-radius: 50%; background: var(--accent);
+  animation: workingpulse 1.1s ease-in-out infinite;
+}
+.workingdots span:nth-child(2) { animation-delay: 0.16s; }
+.workingdots span:nth-child(3) { animation-delay: 0.32s; }
+@keyframes workingpulse { 0%, 100% { opacity: 0.22; } 50% { opacity: 1; } }
+@media (prefers-reduced-motion: reduce) {
+  .working { transition: none; }
+  .workingdots span { animation: none; opacity: 0.7; }
+}
+
+/* What the drawer floats over. Present at every width so the rule that shows
+   it has something to show; inert until the menu is actually open. */
+.railscrim {
+  display: none; position: fixed; inset: 0; z-index: 55;
+  /* 0.62, not the usual 0.5. Checked at 500px on the dark theme: half-opacity
+     black over an already near-black page barely reads as dimmed, and the
+     drawer looked like it had been pasted on rather than opened over. */
+  background: rgba(0, 0, 0, 0.62);
+  opacity: 0; pointer-events: none; transition: opacity 0.18s ease;
+}
+@media (prefers-reduced-motion: reduce) {
+  .rail, .railscrim { transition: none; }
+}
+
+@media (max-width: 980px) {
+  /* A FLOATING PANEL, NOT A BLOCK AT THE TOP OF THE PAGE.
+
+     reported 2026-09-04: "the side bar is hidden, which is ok. but when i click
+     the open button, i would like to see a vertical floating panel but not
+     messy to the top".
+
+     It used to be `position: static`, which drops the rail into the document
+     flow -- so opening the menu did not open a menu, it inserted the brand,
+     twenty links, the quick actions and the version stamp above the page and
+     pushed the content down past the fold. The menu and the page were both
+     on screen and neither was readable.
+
+     Now it stays what it is on a wide screen -- a fixed vertical column --
+     and simply slides in over the content with a scrim behind it. The page
+     underneath does not move at all.
+
+     Slid out of view rather than `display: none`, so the panel animates; and
+     `visibility: hidden` with it, because a panel that is merely offscreen
+     still catches Tab and hands keyboard focus to links nobody can see. The
+     visibility transition is delayed on the way out so the slide finishes
+     before the panel is taken away, and instant on the way in. */
+  .rail {
+    position: fixed; inset: 0 auto 0 0;
+    width: min(17rem, 82vw);
+    display: flex; flex-direction: column;
+    overflow-y: auto; overscroll-behavior: contain;
+    z-index: 60;
+    transform: translateX(-101%); visibility: hidden;
+    transition: transform 0.18s ease, visibility 0s linear 0.18s;
+  }
+  .rail-open .rail {
+    transform: none; visibility: visible;
+    transition: transform 0.18s ease, visibility 0s;
+    box-shadow: 0 18px 46px rgba(0, 0, 0, 0.45);
+  }
+  .railscrim { display: block; }
+  .rail-open .railscrim { opacity: 1; pointer-events: auto; }
+  /* Nothing scrolls behind an open drawer. */
+  .rail-open, .rail-open body { overflow: hidden; }
+
+  .shell { margin: 0; }
+
+  /* BOTH SIDES FOLDED AWAY BY DEFAULT ON A PHONE (reported 2026-08-28:
+     )
+
+     On a wide screen the rail and the chat panel are columns beside the
+     content and cost nothing. On a phone they are not columns -- the media
+     query above puts them into the flow -- so the rail became a block of
+     twenty links sitting on top of every page, and the content started
+     below the fold. Reading anything meant scrolling past the menu first,
+     every time.
+
+     So on a narrow screen the rail is out of the flow until the ☰ button
+     asks for it -- see the drawer rules above, which is where that is now
+     done. */
+  .railbtn { display: inline-flex; }
+
+  /* The rail is a drawer here, not a column, so the bottom bar and the sheet
+     it opens start at the window edge rather than at 208px.
+
+     Written into THIS block rather than a second `@media (max-width: 980px)`
+     of its own: `test_the_phone_layout` reads the first such block in the
+     file to check the rail rules, and a new one above it made four tests
+     look at the wrong twelve lines. One narrow-screen block. */
+  .pilltabs, .queue { left: 0; }
+
+  /* Was `display: none !important`, which on a phone left the folded chat
+     panel with no way back at all. It is the one affordance that has to
+     survive here. */
+
+  /* The drag handles go too, and this was a real bug rather than tidying.
+     (reported 2026-08-21: "side bar 啲 button 唔 work, click 唔到")
+
+     They are `position: fixed` at `right: calc(var(--chat-width) - 3px)`,
+     which is correct only while the chat panel is a fixed column on the right.
+     In this layout the panel becomes part of the flow, but the handles stay
+     pinned — so an invisible 6px strip floats in the middle of the window,
+     straight across the navigation, and swallows the click on whichever item
+     sits under it. Nothing looks wrong; one button in the rail simply stops
+     working, and which one depends on the window width.
+
+     Found by asking the page which element actually receives a click at the
+     centre of each rail link. "CHAT" reported `grip right`. */
+  .grip { display: none !important; }
+}
+
+/* Kept last on purpose.
+
+   These rules and the ones they override have the same specificity -- a
+   media query adds none -- so the later block wins. Placed higher up, every
+   one of them lost silently to `.todaybar .clock .time` and `.cal td`, and
+   the page still overflowed while the CSS looked correct. Order decides. */
+/* One screen, no scrolling.
+
+
+
+   Measured before changing anything: at a 1366x700 laptop the page ran to
+   942px and overflowed by 242. The calendar-and-meters row alone was 396.
+
+   These rules only bite when the window is short. On a tall screen nothing
+   here applies and the page keeps its comfortable spacing -- shrinking a
+   layout that already fits would be solving a problem nobody has. */
+@media (max-height: 820px) {
+  .todaybar { gap: 1rem; padding-bottom: 0.55rem; margin-bottom: 0.7rem; }
+  .todaybar .clock .time { font-size: 1.7rem; }
+  .todaybar .weather .sky { width: 24px; height: 24px; }
+
+  .todaytop { gap: 0.5rem 1.2rem; margin-bottom: 0.55rem; }
+  .todaytop .todaycal h2.section { margin-bottom: 0.3rem; }
+  .todaymeters .gauges { padding: 0.2rem 0 0.5rem; gap: 0.6rem; }
+  .todaymeters .gauge svg { width: 54px; height: 54px; }
+  .todaymeters .gauge .detail { font-size: 0.56rem; }
+
+  /* `table.cal td`, not `.cal td` -- the existing rule is written with the
+     element name and wins otherwise. Checked in the browser rather than
+     assumed: the first version of this line changed nothing at all. */
+  table.cal td, table.cal th { padding: 0.14rem 0.2rem; font-size: 0.72rem; }
+  table.cal { line-height: 1.25; }
+  .calrow .agenda { font-size: 0.8rem; }
+  .calrow .agenda li { padding: 0.15rem 0; }
+
+  .spark { margin: -0.3rem 0 0.45rem; }
+  .spark svg { height: 30px; }
+
+  .favourites { gap: 0.45rem; margin-bottom: 0.5rem; }
+  /* `.favour`, not `a.favour` -- the third time tonight that a rule tied to
+     the tag stopped matching once the card became a div. On a phone this one
+     is what keeps a card from standing 8.4rem tall. The padding now lives on
+     the body, since the wrapper has none. */
+  .favour { min-height: 6.2rem; padding: 0.55rem 0.7rem; }
+  .favour.favwrap { padding: 0; }
+  .favourbody { padding: 0.55rem 0.7rem; }
+
+  .quickrow { margin: -0.1rem 0 0.5rem; }
+  /* 48px of bottom padding was there to clear the fold. Nothing has to be
+     cleared when the page ends on the screen. */
+  main { padding-top: 0.7rem; padding-bottom: 0.8rem; }
+  h2.section { font-size: 0.62rem; margin-bottom: 0.25rem; }
+}
+
+
+/* The "how do I set this up?" link that sits beside every section heading
+   that asks the user for something. Quiet on purpose: it should be findable
+   at the moment of confusion and invisible the rest of the time. */
+.howto {
+  font: 400 0.78rem/1.4 var(--sans); color: var(--muted);
+  text-decoration: none; border-bottom: 1px dotted var(--border);
+  margin-left: 0.5rem; vertical-align: 0.15rem;
+}
+.howto:hover { color: var(--fg); border-bottom-color: currentColor; }
+.guide-steps {
+  white-space: pre-wrap; font: 0.88rem/1.55 var(--mono);
+  background: var(--raised); border: 1px solid var(--border);
+  border-radius: var(--radius-sm); padding: 0.9rem 1rem; overflow-x: auto;
+}
+.guide-list { list-style: none; padding: 0; }
+.guide-list li { padding: 0.55rem 0; border-bottom: 1px solid var(--border); }
+
+/* The banner that says the dashboard is currently reachable from outside.
+   Loud on purpose: this is the one state where not noticing has a cost. */
+.remote-open {
+  border: 1px solid var(--warning, #b26b00);
+  border-left: 4px solid var(--warning, #b26b00);
+  background: var(--pale); color: var(--on-pale);
+  border-radius: var(--radius-sm); padding: 0.7rem 0.9rem;
+  margin: 0 0 1rem; font: 0.86rem/1.5 var(--sans);
+}
+.remote-open code { font: 0.86rem/1.5 var(--mono); }
+.remote-open a { margin-left: 0.4rem; }
+</style>
+
+<script>
+/* EVERYTHING REMEMBERED ABOUT THE LAYOUT IS APPLIED HERE, BEFORE ANYTHING IS
+   PAINTED. The theme was done this way from the start -- "so a Night user
+   never sees a white flash on the way in" -- and the panels were not, which
+   is the bug the maintainer reported on 2026-08-24:
+
+     "當個 panel 拉左出黎，再switch page 嘅時候，chat panel 入面嘅 text
+      boxes 會有一下變形"
+
+   Exactly that. A dragged-wider chat panel was stored in this browser and put
+   back by a script at the BOTTOM of the document, so every page began life at
+   the CSS default width, painted, and then jumped -- and the textarea inside,
+   being full-width, visibly deformed on the way. The folded state had the
+   same shape: a panel somebody had closed flashed open on every page.
+
+   Anything read from storage that moves the layout belongs in this block. The
+   class goes on <html> rather than <body>, which does not exist yet. */
+(function () {
+  var root = document.documentElement;
+
+  function remembered(key) {
+    try { return localStorage.getItem(key); } catch (e) { return null; }
+  }
+
+  /* Shared with the drag handler at the foot of the page, so the bounds a
+     panel is clamped to on the way in and the bounds it is clamped to while
+     being dragged cannot drift apart. */
+  window.PANEL_LIMITS = { '--rail-width': [150, 460], '--chat-width': [220, 700] };
+
+  var mode = remembered("pa-mode") || "auto";
+  root.classList.remove("light", "dark");
+  if (mode === "light") { root.classList.add("light"); }
+  else if (mode === "dark") { root.classList.add("dark"); }
+  else if (root.dataset.ground === "light") { root.classList.add("light"); }
+
+  Object.keys(window.PANEL_LIMITS).forEach(function (name) {
+    var px = parseInt(remembered('pa' + name), 10);
+    if (!isFinite(px)) { return; }
+    var range = window.PANEL_LIMITS[name];
+    root.style.setProperty(
+      name, Math.max(range[0], Math.min(range[1], px)) + 'px');
+  });
+
+  /* CLOSED unless this browser says otherwise. reported 2026-08-24: "by default
+     個 chat panel 應該係收埋". The panel used to open itself on any window
+     with room, on the argument that an assistant you have to go and find is
+     one you stop talking to. Fair for the first minute and wrong afterwards:
+     it costs a third of the window on every page whether or not there is a
+     conversation, and the tab that opens it is always there. A stored value
+     still wins in both directions -- somebody who opened it means it. */
+  /* Permanently, since 2026-09-04: there is no chat panel any
+     more. The class stays because the layout rules that close
+     the gap it left are written against it. */
+  root.classList.add('chat-closed');
+  // The rail always starts folded on a narrow screen. It is a drawer over the
+  // content now, not a column beside it, so there is nothing here to restore.
+})();
+</script>
+<link rel="manifest" href="/manifest.webmanifest">
+<meta name="theme-color" content="#1f2933">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Aki">
+</head>
+<body class="{% if locked %}locked{% endif %}">
+
+{# NOT RENDERED ON A DOOR PAGE, and hiding it in CSS was not enough.
+   Checked on the real machine 2026-08-24: the login page -- which is served
+   to anyone who can reach the port, that being the entire threat the PIN
+   exists for -- carried the assistant's name, the person's name, the queue
+   counts, and THE CONVERSATION. "this is a test from telegram" and the reply
+   to it were both in the HTML of a page nobody had signed in to.
+   A lock whose own front page hands over what is behind it is not a lock. #}
+{% if not locked %}
+<aside class="rail" id="rail">
+  <div class="brand">
+    <span class="mark">
+      <img class="on-dark" src="/static/leaf-mark-dark.png" alt="">
+      <img class="on-light" src="/static/leaf-mark-light.png" alt="">
+    </span>
+    <span class="name">{{ assistant_name }}
+      {% if user_name %}<span class="for">for {{ user_name }}</span>{% endif %}
+    </span>
+  </div>
+
+  <nav>
+    {# Six groups, from one definition shared with the tab strip below. The
+       href is the group's first page; the script at the foot of this file
+       swaps it for whichever page you were last on inside that group. #}
+    {% for group in nav_groups %}
+      {% set count = group.count(nav_counts) %}
+      <a href="{{ group.pages[0].path }}" data-group="{{ group.key }}"
+         data-paths="{% for page in group.pages %}{{ page.path }} {% endfor %}"
+         class="{{ 'on' if group.key == nav_here.key }}{{ ' settings' if group.key == 'settings' }}">
+        <span class="ico">{{ group.icon }}</span>{{ group.label }}
+        {% if count %}<span class="n">{{ count }}</span>{% endif %}
+      </a>
+    {% endfor %}
+  </nav>
+
+  <div class="foot">
+    {# The three-line readout stood here -- workspace found, waiting to send,
+       queued for me..
+
+       Two of the three are now said better elsewhere: the queue counts are on
+       the bar at the foot of every page, with the items behind them one press
+       away, and "Workspace: found" is a line that says nothing on every day
+       except the one where the drive has not mounted -- and on that day the
+       page itself is visibly empty and says why. A status line that is
+       correct and ignorable is one people stop reading, which is a problem on
+       the day it changes. #}
+    <div class="h">System</div>
+    <a class="act" href="/health"><span>&#9673;</span> Run health check</a>
+    <a class="act" href="/schedule"><span>&#9684;</span> Scheduled work</a>
+
+    {# Recycle / End of day / Me time.
+
+
+
+       They belong here rather than on Today for the same reason Stop the
+       dashboard does: they act on the assistant, not on the day. And moving
+       them off the page is part of what lets the favourite cards grow. #}
+    {% include "_quick.html" %}
+
+    {# Framed like the three above it.  -- it sits
+       under three bordered buttons and was the only bare one, which read as
+       a link rather than as the control it is. #}
+    <form method="post" action="/shutdown" class="stopform"
+          onsubmit="return confirm('Stop the dashboard?\n\nYour assistant keeps running — this only closes this web page\'s server. Start it again from your launcher.');">
+      <input type="hidden" name="token" value="{{ token }}">
+      {# Bigger and red without being hovered (). It was the same size and colour as "Run health check"
+         above it, which is not a fair description of what it does. #}
+      <button type="submit" class="act stop danger loud"><span>&#9632;</span> Stop the dashboard</button>
+    </form>
+  </div>
+
+  {# The assistant's name and accent used to sit here. It said nothing you
+     could act on -- the name is at the top of the same rail and the accent is
+     the colour you are already looking at. . #}
+  <div class="mode">
+    <button type="button" class="modebtn" data-mode="light" title="Day">
+      <svg viewBox="0 0 24 24" aria-hidden="true">
+        <circle cx="12" cy="12" r="4.5"/>
+        {% for angle in [0, 45, 90, 135, 180, 225, 270, 315] %}
+          <line x1="12" y1="12" x2="12" y2="3"
+                transform="rotate({{ angle }} 12 12)"/>
+        {% endfor %}
+      </svg>Day</button>
+    <button type="button" class="modebtn" data-mode="dark" title="Night">
+      <svg viewBox="0 0 24 24" aria-hidden="true">
+        <path d="M20 14.5A8.5 8.5 0 0 1 9.5 4a8.5 8.5 0 1 0 10.5 10.5z"/>
+      </svg>Night</button>
+    {# Not a third mode: a way in. . Day and Night stay as the two-state override;
+       picking a theme on that page clears the override, which is how you get
+       back to "as the theme intends" without a third button explaining
+       itself. #}
+    <a class="modebtn" href="/theme" title="Colours, type and feel">
+      <svg viewBox="0 0 24 24" aria-hidden="true">
+        <circle cx="12" cy="12" r="8"/>
+        <path d="M12 4a8 8 0 0 1 0 16z" fill="currentColor" stroke="none"/>
+      </svg>Theme</a>
+  </div>
+  <div class="version"><span>v{{ version }}</span><span>Personal Agent</span></div>
+</aside>
+{# Tapping beside an open drawer closes it -- the gesture everybody already
+   has for this, and the reason the panel does not need a close button of its
+   own. Hidden from assistive tech: the Escape key does the same job there. #}
+<div class="railscrim" onclick="foldRail(false)" aria-hidden="true"></div>
+
+{# Raised by any form that carries `data-working`. One of these for the whole
+   page rather than one per button: only one of them can be running, because
+   the request that raised it is what the browser is waiting on. #}
+<div class="working" id="working" hidden role="status" aria-live="polite">
+  <div class="workingcard">
+    <div class="workingdots" aria-hidden="true"><span></span><span></span><span></span></div>
+    <p class="workingwhat"></p>
+    <p class="workingnote"></p>
+  </div>
+</div>
+{% endif %}
+
+<div class="shell">
+  <div class="topbar">
+    {# Only ever visible on a narrow screen; on a wide one the rail is
+       already there and a button to reveal it would be furniture. #}
+    <button class="railbtn" onclick="foldRail()" aria-label="Menu"
+            aria-controls="rail" aria-expanded="false">☰</button>
+    {% block back %}{% endblock %}
+    {# THE TOP BAR NAMES THE GROUP, NOT THE TAB.
+
+       That is right, and the reason is a foot below the heading: the tab strip
+       already says which tab you are on, and it says it by highlighting one
+       of six. A heading that repeats the highlighted tab spends the largest
+       type on the page on the one fact the page has already given you, and
+       spends it saying "Knowledge" on a screen whose rail says System.
+
+       `titlemode` is how a page opts out. Two kinds do: a door, which has no
+       group to belong to, and a drill-down -- one project, one guide, one
+       library entry -- where the heading is the name of the thing you opened
+       and replacing it with "Workspace" would delete the only place that
+       name appears. Those pages carry a back arrow; the tabbed ones do not. #}
+    {% set titlemode %}{% block titlemode %}group{% endblock %}{% endset %}
+    <h1>
+      {#- `pages | length > 1` is load-bearing, not caution. The whole
+          argument for replacing the heading is that the tab strip below
+          already names the page -- and the strip is only drawn for a group
+          with more than one page. Without this clause the Workspace group,
+          which has exactly one, lost the user's own word for their work:
+          "Projects" became "Workspace" on the one page that says it. The
+          package's own canary test caught that within a minute. -#}
+      {%- if titlemode | trim == "group" and nav_here and nav_here.pages | length > 1 -%}
+        {{ nav_here.label }}
+      {%- else -%}
+        {% block heading %}{{ assistant_name }}{% endblock %}
+      {%- endif -%}
+    </h1>
+    <div class="actions">{% block actions %}{% endblock %}</div>
+  </div>
+  {% if nav_here.pages | length > 1 %}
+    <div class="tabs">
+      {% for page in nav_here.pages %}
+        {% set count = nav_counts.get(page.badge) if page.badge else 0 %}
+        <a href="{{ page.path }}"
+           class="{{ 'on' if request.path == page.path or request.path.startswith(page.path + '/') }}">
+          {{ page.label }}{% if count %} <span class="n">{{ count }}</span>{% endif %}
+        </a>
+      {% endfor %}
+    </div>
+  {% endif %}
+  <main>
+  {% if remote_access %}
+  {# A door that is open and does not look open is the state exposure.py
+     exists to avoid. On every page, not just the one that switched it on. #}
+  <div class="remote-open" role="status">
+    <strong>Reachable from outside</strong> — this dashboard is answering at
+    <code>{{ remote_access }}</code>. Anyone who reaches that address needs
+    only your PIN.
+    <a href="{{ url_for('connections', tab='gateway') }}">turn it off</a>
+  </div>
+  {% endif %}
+  {% block body %}{% endblock %}</main>
+</div>
+
+{# The queue bar, and the sheet it opens. On every page, outside `.shell`,
+   because it is fixed to the window rather than to the content -- and out of
+   `main`, which carries a z-index and would otherwise stack the sheet inside
+   it. Not on a door page: it lists real work. #}
+{% if not locked %}{% include "_columns.html" %}{% endif %}
+{% if not locked %}{% include "_picker.html" %}{% endif %}
+
+<script>
+/* EVERY SHEET ON EVERY PAGE, upgraded from open to modal.
+ *
+ * A `dialog.sheet` is rendered with the `open` attribute by whichever route
+ * drew it, which is what lets Add and Edit work with JavaScript switched off
+ * -- the address opens the form, not a button. An open dialog is not a modal
+ * one though: no backdrop, and the page behind it still takes clicks. So it
+ * is closed and reopened properly here.
+ *
+ * IT LIVES IN BASE. It was written into `schedule.html` first, and within the
+ * hour the Tools page needed a sheet and got the markup without the script --
+ * so the form opened un-modal, in the flow, and looked broken. Two copies of
+ * one behaviour is one page that quietly does not have it. */
+(function () {
+  var sheets = document.querySelectorAll('dialog.sheet[open]');
+  for (var i = 0; i < sheets.length; i++) {
+    var sheet = sheets[i];
+    if (!sheet.showModal) { continue; }      /* very old browser: leave it */
+    sheet.close();
+    sheet.showModal();
+
+    /* Escape closes a modal by itself, and would leave the address still
+       saying `?add=1` -- so pressing Add again would look ignored. The Close
+       link already knows the clean address, so it is read rather than
+       rebuilt: one page cannot then disagree with its own button. */
+    (function (one) {
+      var shut = one.querySelector('.sheethead a[href]');
+      one.addEventListener('cancel', function (e) {
+        if (!shut) { return; }
+        e.preventDefault();
+        window.location.href = shut.getAttribute('href');
+      });
+    })(sheet);
+  }
+})();
+</script>
+
+
+{% if not locked %}
+<script>
+/* `foldRail()` toggles; `foldRail(false)` closes. The scrim and Escape only
+   ever want to close, and a toggle bound to them can reopen the drawer they
+   were meant to dismiss. */
+function foldRail(want) {
+  var root = document.documentElement;
+  var open = (want === undefined)
+    ? !root.classList.contains('rail-open')
+    : !!want;
+  root.classList.toggle('rail-open', open);
+  var btn = document.querySelector('.railbtn');
+  if (btn) { btn.setAttribute('aria-expanded', open ? 'true' : 'false'); }
+}
+
+/* NOT REMEMBERED ACROSS PAGES, deliberately -- the stored `pa-rail-open`
+   that used to reopen it is gone with this. While the rail was part of the
+   page, "leave it open" was a reasonable thing to store. As a panel that
+   floats over the content, restoring it open means every page you load
+   starts underneath a menu you have to dismiss before you can read it. */
+document.addEventListener('keydown', function (e) {
+  if (e.key === 'Escape') { foldRail(false); }
+});
+
+/* Raise the working overlay for any form that says how long it is going to
+   take. Written once, against a `data-working` attribute, so the next slow
+   button is one attribute rather than another copy of this. */
+(function () {
+  var box = document.getElementById('working');
+  if (!box) { return; }
+
+  document.addEventListener('submit', function (e) {
+    var form = e.target.closest('form[data-working]');
+    if (!form) { return; }
+    /* Recycle now asks `confirm()` from its own `onsubmit`, which runs on the
+       form before this one runs on the document. Answering "cancel" there
+       calls preventDefault -- it does not stop the event reaching here, so
+       without this line saying no to the question still raised the overlay
+       over a page where nothing was going to happen. */
+    if (e.defaultPrevented) { return; }
+
+    box.querySelector('.workingwhat').textContent = form.dataset.working;
+    box.querySelector('.workingnote').textContent = form.dataset.workingNote || '';
+    box.hidden = false;
+    // On the next frame, so the fade has a start state to move from. Setting
+    // both in one go paints it already opaque.
+    requestAnimationFrame(function () { box.classList.add('up'); });
+
+    // A second press queues a second run of the same job, and the first
+    // symptom of that is two wrap-ups for one day.
+    form.querySelectorAll('button').forEach(function (b) { b.disabled = true; });
+    foldRail(false);
+  });
+
+  /* Coming back with the Back button serves the page from the browser's
+     cache in the state it was left -- overlay up, button disabled, nothing
+     running. `pageshow` fires on a cached restore where `load` does not. */
+  window.addEventListener('pageshow', function () {
+    box.classList.remove('up');
+    box.hidden = true;
+    document.querySelectorAll('form[data-working] button').forEach(
+      function (b) { b.disabled = false; });
+  });
+})();
+</script>
+{% endif %}
+
+<!-- Drag either edge to resize; double-click a handle to put it back. -->
+{# The draggable edges belong to two panels that a door page does not have. #}
+{% if not locked %}
+<div class="grip left"></div>
+<div class="grip right"></div>
+{% endif %}
+
+<script>
+/* Show-what-I-typed, for a field holding a secret.
+
+   Delegated from the document so it works for any such field on any page, and
+   deliberately doing nothing but switching the input's type: no value is
+   fetched, stored or sent anywhere. The button starts off, so the default is
+   masked even if the script never runs. */
+document.addEventListener('click', function (event) {
+  var button = event.target.closest('[data-reveal]');
+  if (!button) return;
+  var field = button.parentNode.querySelector('[data-secret]');
+  if (!field) return;
+  var showing = field.type === 'text';
+  field.type = showing ? 'password' : 'text';
+  button.classList.toggle('on', !showing);
+  button.setAttribute('aria-label',
+    showing ? 'Show what I typed' : 'Hide what I typed');
+  field.focus();
+});
+
+/* --- day / night ---------------------------------------------------------
+   `:root.light` had existed in the stylesheet since the beginning and nothing
+   ever added the class, so the light palette was unreachable. This is what
+   reaches it..
+
+   Three states, not two: Day, Night, and Auto — because "follow the computer"
+   is a real preference and a two-way toggle silently takes it away. */
+(function () {
+  var buttons = document.querySelectorAll(".modebtn");
+  if (!buttons.length) { return; }
+  var root = document.documentElement;
+
+  function paint(mode) {
+    /* Auto hands the decision back to the theme, which already carries a
+       ground -- Paper is light, Ink is dark. The first version dropped both
+       classes and therefore forced dark, quietly overriding the light themes
+       for anybody who had chosen one. */
+    root.classList.remove("light", "dark");
+    if (mode === "light") { root.classList.add("light"); }
+    else if (mode === "dark") { root.classList.add("dark"); }
+    else if (root.dataset.ground === "light") { root.classList.add("light"); }
+    buttons.forEach(function (b) {
+      b.classList.toggle("on", b.dataset.mode === mode);
+    });
+  }
+
+  var saved = "auto";
+  try { saved = localStorage.getItem("pa-mode") || "auto"; } catch (e) {}
+  paint(saved);
+
+  /* Clicking the theme you are already on clears the Day/Night override and
+     hands the ground back to the theme. Without this the override is a
+     one-way door: once Day is pressed there is no way back to "whatever the
+     theme says" short of clearing site data. */
+  buttons.forEach(function (button) {
+    button.addEventListener("click", function () {
+      if (button.classList.contains("on")) {
+        try { localStorage.setItem("pa-mode", "auto"); } catch (e) {}
+        paint("auto");
+      }
+    });
+  });
+
+  buttons.forEach(function (button) {
+    button.addEventListener("click", function () {
+      var mode = button.dataset.mode;
+      try { localStorage.setItem("pa-mode", mode); } catch (e) {}
+      paint(mode);
+    });
+  });
+})();
+
+/* --- the rail remembers where you were ---------------------------------- */
+/* Grouping costs a click. This is what gives it back: each group's link goes
+   to the page you last had open inside it, not always to the first tab. */
+(function () {
+  var here = window.location.pathname;
+  document.querySelectorAll('.tabs a').forEach(function (tab) {
+    if (tab.getAttribute('href') === here) {
+      var group = document.querySelector('.rail a.on[data-group]');
+      if (group) {
+        try { localStorage.setItem('pa-tab-' + group.dataset.group, here); }
+        catch (e) {}
+      }
+    }
+  });
+  document.querySelectorAll('.rail a[data-group]').forEach(function (link) {
+    var last = null;
+    try { last = localStorage.getItem('pa-tab-' + link.dataset.group); }
+    catch (e) {}
+    /* Only within the same group -- and this is checked against the group's
+       OWN pages, which is the fix.
+
+       WHAT WENT WRONG (reported 2026-08-21: "the side bar [Workspaces] button
+       is not working")
+       ------------------------------------------------------------------
+       It worked. It went to the wrong place, which to anybody using it is
+       the same thing.
+
+       The old guard asked whether the remembered path appeared in the tab
+       strip currently on screen -- the tabs of whichever group you happen to
+       be in, not of the link being rewritten. Then it made that irrelevant:
+
+           if (belongs || link.classList.contains('on') === false)
+
+       The second half is true for every group you are not currently in, so
+       the check was bypassed for exactly the links it was meant to protect.
+
+       It only bit after pages moved between groups. "Watching" was in
+       Workspaces and became "Threads" under System; anybody whose browser
+       still remembered `/watching` for the Workspaces group got that link
+       pointed at it for ever. A fresh browser was fine, which is why testing
+       it here found nothing.
+
+       Now each rail link declares its own pages, and a remembered path is
+       used only if it is still one of them. When it is not, the memory is
+       dropped rather than followed. */
+    var owned = (link.dataset.paths || '').trim().split(/\s+/);
+    if (last && link.dataset.group !== 'today') {
+      if (owned.indexOf(last) !== -1) {
+        link.setAttribute('href', last);
+      } else {
+        try { localStorage.removeItem('pa-tab-' + link.dataset.group); }
+        catch (e) {}
+      }
+    }
+  });
+})();
+
+/* --- the clock ---------------------------------------------------------- */
+/* Digits are separate elements so only the one that changed animates: a whole
+   clock that flips every second is a distraction, and this page is meant to be
+   left open. */
+(function () {
+  var host = document.getElementById('clock');
+  if (!host) { return; }
+
+  var previous = {};
+  function paint() {
+    var now = new Date();
+    var parts = {
+      h: String(now.getHours()).padStart(2, '0'),
+      m: String(now.getMinutes()).padStart(2, '0'),
+      s: String(now.getSeconds()).padStart(2, '0')
+    };
+    Object.keys(parts).forEach(function (key) {
+      var cell = host.querySelector('[data-part="' + key + '"]');
+      if (!cell || previous[key] === parts[key]) { return; }
+      cell.textContent = parts[key];
+      cell.classList.remove('flip');
+      void cell.offsetWidth;          /* restart the animation */
+      cell.classList.add('flip');
+      previous[key] = parts[key];
+    });
+  }
+  paint();
+  setInterval(paint, 1000);
+})();
+/* --- draggable side panels ---------------------------------------------- */
+/* Both widths are CSS variables, so moving one is a single property write and
+   the whole layout follows. Remembered per browser: a width you have to set
+   again every visit is not an adjustable panel. */
+(function () {
+  /* One set of bounds, defined in the head where the stored width is put back
+     before the page is painted. Two copies of a number like this drift, and
+     the drift shows up as a panel that snaps to a different width the next
+     time you load the page than the one you just dragged it to. */
+  var LIMITS = window.PANEL_LIMITS;
+
+  function apply(name, px) {
+    var range = LIMITS[name];
+    px = Math.max(range[0], Math.min(range[1], px));
+    document.documentElement.style.setProperty(name, px + 'px');
+    try { localStorage.setItem('pa' + name, String(px)); } catch (e) {}
+  }
+
+  document.querySelectorAll('.grip').forEach(function (grip) {
+    var name = grip.classList.contains('left') ? '--rail-width' : '--chat-width';
+    grip.addEventListener('mousedown', function (event) {
+      event.preventDefault();
+      grip.classList.add('dragging');
+      document.body.classList.add('dragging');
+
+      function move(moved) {
+        apply(name, name === '--rail-width'
+          ? moved.clientX
+          : window.innerWidth - moved.clientX);
+      }
+      function stop() {
+        grip.classList.remove('dragging');
+        document.body.classList.remove('dragging');
+        document.removeEventListener('mousemove', move);
+        document.removeEventListener('mouseup', stop);
+      }
+      document.addEventListener('mousemove', move);
+      document.addEventListener('mouseup', stop);
+    });
+    /* Double-click resets, so a panel dragged off the screen is recoverable
+       without clearing browser storage. */
+    grip.addEventListener('dblclick', function () {
+      apply(name, name === '--rail-width' ? 208 : 340);
+    });
+  });
+})();
+
+/* --- removing something: the first of the two confirmations ------------- */
+/* The second is on the server, which will not act unless the name was typed
+   back exactly. This one is here to catch the mis-click before it becomes a
+   decision at all. */
+/* THE CONSEQUENCE COMES FROM THE FORM (2026-09-05).
+   One sentence was written here for every `.removes` form on the site, and it
+   was wrong nearly everywhere it appeared. `workflows.remove` and
+   `plugins.remove` are both `shutil.rmtree` -- nothing is moved anywhere and
+   nothing can be put back -- while `mcp.remove` edits one JSON file. Worse,
+   the Run button on a workflow carried `class="removes"` too, so pressing Run
+   asked whether to REMOVE the workflow and promised the sandbox, and pressing
+   OK ran it.
+   A dialog that misdescribes what the button does is worse than no dialog:
+   it is read once, found to be wrong, and then not read again. */
+document.addEventListener('submit', function (event) {
+  var form = event.target;
+  if (!form.dataset.confirm) { return; }
+  var consequence = form.dataset.consequence || '';
+  if (!window.confirm(form.dataset.confirm
+      + (consequence ? '\n\n' + consequence : ''))) {
+    event.preventDefault();
+  }
+});
+
+
+/* The anti-forgery token, for the handful of POSTs made from script
+   rather than from a form that already carries it in a hidden field. */
+window.AKI_TOKEN = {{ token | tojson }};
+
+/* --- shadow clones: the [+] and the [-] --------------------------------- */
+/* Selecting a chip decides who the next message is addressed to. That IS the
+   routing -- every line carries a session name and each agent answers only to
+   its own, so there is no broker anywhere in this. */
+(function () {
+  var strip = document.getElementById('clonestrip');
+  if (!strip) { return; }
+
+  var chosen = 'main';
+
+  function target(name) {
+    chosen = name;
+    var one = document.getElementById('chatsession');
+    var two = document.getElementById('uploadsession');
+    if (one) { one.value = name; }
+    if (two) { two.value = name; }
+    draw();
+  }
+
+  function post(url, body) {
+    var form = new FormData();
+    form.append('token', window.AKI_TOKEN || '');
+    form.append('back', window.location.pathname);
+    Object.keys(body).forEach(function (key) { form.append(key, body[key]); });
+    /* JSON back, so a refusal can be shown rather than vanishing into a
+       redirect the fetch quietly follows. */
+    return fetch(url, {
+      method: 'POST', body: form, headers: { 'Accept': 'application/json' },
+    });
+  }
+
+  var known = [];
+
+  function draw() {
+    strip.innerHTML = '';
+
+    var all = [{ name: 'main', alive: true, main: true }].concat(known);
+    all.forEach(function (one) {
+      var chip = document.createElement('button');
+      chip.type = 'button';
+      chip.className = 'who' + (one.name === chosen ? ' on' : '')
+        + (one.alive === false ? ' dead' : '');
+      chip.textContent = one.name;
+      chip.title = one.main ? 'The main body'
+        : (one.folder || '') + (one.alive === false
+          ? ' — its window is gone' : '');
+      chip.onclick = function () { target(one.name); };
+      strip.appendChild(chip);
+    });
+
+    var plus = document.createElement('button');
+    plus.type = 'button';
+    plus.className = 'plus';
+    plus.textContent = '+';
+    plus.title = 'Add a shadow clone';
+    plus.onclick = add;
+    strip.appendChild(plus);
+
+    if (chosen !== 'main') {
+      var minus = document.createElement('button');
+      minus.type = 'button';
+      minus.className = 'minus';
+      minus.textContent = '−';
+      minus.title = 'Dispel ' + chosen;
+      minus.onclick = remove;
+      strip.appendChild(minus);
+    }
+  }
+
+  function add() {
+    /* Only the folder is asked for. The name is the assistant's own plus a
+       number -- a clone of David is David doing a second thing, and asking
+       somebody to invent a name for that is asking for something the system
+       already knows. (reported 2026-09-01.) */
+    var folder = window.prompt(
+      'Which folder should the new one work in?\n\n'
+      + 'A clone works on one project, and that is what keeps two of them '
+      + 'out of each other\u2019s way.');
+    if (!folder) { return; }
+
+    post('/clones/add', { folder: folder })
+      .then(function (answer) {
+        /* A failure here used to be silent: the chip simply never appeared
+           and there was nothing to read. Whatever the server refused, say
+           it. */
+        if (!answer.ok) {
+          return answer.json().catch(function () { return {}; })
+            .then(function (body) {
+              window.alert(body.error || 'That did not work.');
+            });
+        }
+        return refresh();
+      })
+      .catch(function (error) { window.alert('That did not work: ' + error); });
+  }
+
+
+  function remove() {
+    /* Dispelling is not a mid-air abort: whatever it had to say has already
+       been said into this conversation. Still worth one confirmation, because
+       the window and its work go with it. */
+    if (!window.confirm('Dispel ' + chosen + '?\n\nIts window closes. '
+        + 'Anything it reported is already in this conversation.')) { return; }
+    var going = chosen;
+    post('/clones/remove', { name: going })
+      .then(function () { target('main'); return refresh(); });
+  }
+
+
+  function refresh() {
+    return fetch('/clones').then(function (r) { return r.json(); })
+      .then(function (answer) {
+        if (!answer.ok) { return; }
+        known = answer.clones || [];
+        if (chosen !== 'main'
+            && !known.some(function (one) { return one.name === chosen; })) {
+          chosen = 'main';
+        }
+        draw();
+      }).catch(function () { });
+  }
+
+  refresh();
+  window.setInterval(refresh, 15000);
+})();
+
+/* --- the app, and the tap on the shoulder ------------------------------- */
+/* Dropping Telegram removed the notification as well as the transport. This
+   puts it back with no third-party ACCOUNT: the VAPID keypair is generated on
+   this machine and the subscription is stored here and used by this dashboard
+   alone.
+
+   Not "no third party", which is what this comment said until 2026-09-06 and
+   is not true of any web push. Delivery goes through the browser vendor's own
+   push service -- Google, Mozilla or Apple depending on the browser -- which
+   sees that a message went to an endpoint, though not what it says: the
+   payload is encrypted to a key that service does not have. `push.py` states
+   it correctly and this comment had quietly rounded it up.
+
+   Two things the browser insists on, and neither is a bug to chase. A service
+   worker registers only on a SECURE ORIGIN, so this works at the desk and
+   through the tunnel and nowhere in between. And on iOS the page has to be
+   added to the Home Screen before it may even ask. */
+(function () {
+  if (!('serviceWorker' in navigator)) { return; }
+
+  navigator.serviceWorker.register('/sw.js').catch(function () { });
+
+  function urlBase64ToUint8Array(value) {
+    var padded = (value + '='.repeat((4 - value.length % 4) % 4))
+      .replace(/-/g, '+').replace(/_/g, '/');
+    var raw = window.atob(padded);
+    var out = new Uint8Array(raw.length);
+    for (var i = 0; i < raw.length; i++) { out[i] = raw.charCodeAt(i); }
+    return out;
+  }
+
+  window.akiEnableNotifications = function (button) {
+    function say(text) {
+      if (button) { button.textContent = text; }
+    }
+
+    if (!('PushManager' in window)) {
+      say('This browser cannot');
+      return;
+    }
+
+    say('Asking…');
+    Notification.requestPermission().then(function (permission) {
+      if (permission !== 'granted') {
+        /* Not an error. They said no, and the page should not nag. */
+        say('Not now');
+        return;
+      }
+      return fetch('/push/key').then(function (r) { return r.json(); })
+        .then(function (answer) {
+          if (!answer.ok) { say('Needs one more piece'); throw answer.error; }
+          return navigator.serviceWorker.ready.then(function (worker) {
+            return worker.pushManager.subscribe({
+              userVisibleOnly: true,
+              applicationServerKey: urlBase64ToUint8Array(answer.key),
+            });
+          });
+        })
+        .then(function (subscription) {
+          return fetch('/push/subscribe', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              subscription: subscription.toJSON(),
+              label: navigator.platform || '',
+            }),
+          });
+        })
+        .then(function () { say('On'); });
+    }).catch(function () { say('Did not work'); });
+  };
+})();
+
+</script>
+
+</body>
+</html>

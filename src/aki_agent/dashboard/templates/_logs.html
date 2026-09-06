@@ -1,0 +1,25 @@
+<p class="freshness">The files themselves, for when a summary is not enough. Anything credential-shaped is stripped before display.</p>
+
+<table>
+  <thead><tr><th>File</th><th>Size</th><th>Changed</th></tr></thead>
+  <tbody>
+  {% for file in files %}
+    <tr>
+      <td><a href="/logs?file={{ file.name }}">{{ file.name }}</a></td>
+      <td class="blank">{{ file.size }}</td>
+      <td class="blank">{{ file.modified.strftime('%d %b %H:%M') }}</td>
+    </tr>
+  {% else %}
+    <tr><td colspan="3" class="empty">Nothing logged yet.</td></tr>
+  {% endfor %}
+  </tbody>
+</table>
+
+{% if chosen %}
+  <h2><span class="ico">&#9636;</span>{{ chosen }}</h2>
+  {% if refused %}
+    <div class="note bad">{{ refused }}</div>
+  {% else %}
+    <pre>{{ body }}</pre>
+  {% endif %}
+{% endif %}

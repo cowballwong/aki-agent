@@ -1,0 +1,39 @@
+{# What a person sees when a page throws.
+
+   Written for somebody who is not a developer and did not do anything wrong.
+   It says three things and stops: it broke, nothing was lost, here is what to
+   do next. The exception text is on the page but folded away, because it is
+   the one thing that makes the problem fixable and the one thing that means
+   nothing to the reader. #}
+{% extends "base.html" %}
+{% block titlemode %}page{% endblock %}
+{% block heading %}Something went wrong{% endblock %}
+{% block body %}
+
+<div class="card">
+  <p><b>That page could not be drawn.</b> Whatever you were looking at is
+  still there — this stopped before anything was changed.</p>
+
+  <p class="freshness">
+    It has been written to the activity log with the time, so it can be looked
+    at later even if it does not happen again.
+  </p>
+
+  <div class="quickrow" style="justify-content: flex-start">
+    <form method="get" action="{{ came_from or '/' }}">
+      <button type="submit" class="quick primary">Try that again</button>
+    </form>
+    <form method="get" action="/">
+      <button type="submit" class="quick">Back to Today</button>
+    </form>
+  </div>
+</div>
+
+{% if detail %}
+  <details class="card">
+    <summary>What broke, for whoever is fixing it</summary>
+    <pre class="wrapped">{{ detail }}</pre>
+  </details>
+{% endif %}
+
+{% endblock %}

@@ -1,0 +1,287 @@
+{% extends "base.html" %}
+{% from "_subtabs.html" import subtabs %}
+{% block heading %}Knowledge{% endblock %}
+{% block body %}
+
+{# TWO TABS SINCE 2026-09-05, not three.
+
+   Matching by meaning moved to Memory > Vector store the same evening. It
+   was a vector store sitting on a page of documents while a second vector
+   store was being built on the Memory page -- two systems doing one job, in
+   two places, which is the shape of problem this dashboard has now been
+   bitten by three times in one night.
+
+   The maintainer left the call to me (). A vector store is memory
+   machinery, not a shelf. #}
+{{ subtabs("/knowledge", tab, [
+     ("docs", "Doc & Link"),
+     ("learned", "Learn from You")]) }}
+
+{% if error %}<div class="note bad">{{ error }}</div>{% endif %}
+{% if note %}<div class="note">{{ note }}</div>{% endif %}
+
+{# ------------------------------------------------------------------ docs #}
+{% if tab == 'docs' %}
+
+<p class="freshness">
+  The documents and links you want the assistant to know about. Files are
+  pointed at, never copied, so they stay current and stay yours.
+</p>
+
+{% if broken %}
+  <div class="note">
+    {{ broken|length }} document(s) below have moved or been deleted. A pointer
+    that has gone stale looks exactly like one that works, so it is flagged
+    here rather than left to be discovered.
+  </div>
+{% endif %}
+
+<p class="rowtools">
+  <a class="btn primary" href="/knowledge?tab=docs&amp;add=1">+ Add something</a>
+</p>
+
+{% if entries %}
+<div class="stack">
+  {% for entry in entries %}
+    <div class="rowitem">
+      <div class="rowhead">
+        <b>{{ entry.title }}</b>
+        {% if entry.kind == 'document' and not entry.available %}
+          <span class="pill bad">missing</span>
+        {% elif entry.kind == 'link' %}
+          <span class="pill">link</span>
+        {% else %}
+          <span class="pill ok">found</span>
+        {% endif %}
+        {% for tag in entry.tags %}<span class="pill">{{ tag }}</span>{% endfor %}
+        <span class="rowacts">
+          <form method="post" action="/knowledge/delete" class="inline"
+                onsubmit="return confirm('Take {{ entry.title | js }} off the shelf?\n\nThe file itself is not touched.')">
+            <input type="hidden" name="token" value="{{ token }}">
+            <input type="hidden" name="key" value="{{ entry.key }}">
+            <button type="submit">Remove</button>
+          </form>
+        </span>
+      </div>
+      <details class="rowmore">
+        <summary>Open</summary>
+        <p class="freshness"><b>What it is for.</b>
+          {{ entry.why or 'It does not say.' }}</p>
+        <p class="freshness" style="word-break: break-all">{{ entry.target }}</p>
+      </details>
+    </div>
+  {% endfor %}
+</div>
+{% else %}
+  <p class="empty">Nothing on the shelf yet.</p>
+{% endif %}
+
+<p class="freshness">
+  Anything on this shelf is treated as <b>information</b>, never as
+  instructions. A document containing a sentence like &ldquo;ignore your
+  previous instructions&rdquo; is a document with an odd sentence in it, and
+  the assistant will say so rather than obey it.
+</p>
+
+<dialog id="shelfform" class="sheet" {{ 'open' if showing_form }}>
+  <div class="sheethead">
+    <b>Add to the shelf</b>
+    <a class="btn" href="/knowledge?tab=docs">Close</a>
+  </div>
+
+  <form method="post" action="/knowledge/add">
+    <input type="hidden" name="token" value="{{ token }}">
+    <label>Title<input name="title" value="{{ typed.get('title', '') }}"
+      placeholder="Site safety handbook"></label>
+
+    <label>Kind
+      <select name="kind" id="shelfkind">
+        <option value="document">A file on this computer</option>
+        <option value="link">A link</option>
+      </select>
+    </label>
+
+    {# PICK IT, DO NOT TYPE IT. the same thing he asked for
+       folders on 2026-08-21 ().
+
+       Nobody types a full path correctly from memory, and this is the worst
+       place to get one wrong: a mistyped path is stored as a pointer that
+       looks exactly like a working one until the day something reads it.
+       The field stays, because typing has to keep working when there is no
+       desktop to draw a dialog on. #}
+    <label id="shelfwhere">Where</label>
+    <div class="row tight">
+      <input type="text" name="target" id="shelftarget"
+             value="{{ typed.get('target', '') }}"
+             placeholder="Pick a file, or paste a link">
+      <button type="button" id="shelfbrowse">Browse&hellip;</button>
+    </div>
+
+    <label>What it is for<input name="why" value="{{ typed.get('why', '') }}"
+      placeholder="The rules I have to follow on site"></label>
+    <label>Tags (comma separated)<input name="tags" value="{{ typed.get('tags', '') }}"
+      placeholder="reference, safety"></label>
+
+    <button type="submit" class="primary">Add</button>
+  </form>
+</dialog>
+
+{# ---------------------------------------------------------------- learned #}
+{% elif tab == 'learned' %}
+  {% include "_learned.html" %}
+
+{% endif %}
+
+{# The "Matching by meaning" section stood here, with its install button and
+   its on/off. It is Memory > Vector store now -- one page owns the vector
+   store, and it is the page whose other tabs are the assistant's memory.
+   Linked rather than silently moved: somebody who used it here has to be
+   able to find where it went. #}
+<p class="freshness underneath">
+  Searching by meaning, and reading these documents into a vector store, moved
+  to <a href="/memory?tab=vectors">Memory &rsaquo; Vector store</a>.
+</p>
+
+
+<script>
+/* The file picker on the shelf form.
+ *
+ * Two ways in, the same as the schedule page's folder picker: the machine's
+ * own dialog first, and the list this page can draw when there is no desktop
+ * to open one on. Typing still works either way -- the field is a field. */
+(function () {
+  var kind = document.getElementById('shelfkind');
+  var box = document.getElementById('shelftarget');
+  var browse = document.getElementById('shelfbrowse');
+  var label = document.getElementById('shelfwhere');
+  if (!kind || !box) { return; }
+
+  var TOKEN = {{ token | tojson }};
+
+  /* A link is typed and a file is picked, so the Browse button belongs to
+     only one of them. Leaving it up for a link would be offering to open a
+     file dialog to fill in a web address. */
+  function follow() {
+    var wantsFile = kind.value === 'document';
+    if (browse) { browse.hidden = !wantsFile; }
+    box.placeholder = wantsFile ? 'Pick a file, or type its path'
+                                : 'https://...';
+    if (label) {
+      label.textContent = wantsFile ? 'Which file' : 'The address';
+    }
+  }
+  kind.addEventListener('change', follow);
+  follow();
+
+  if (!browse) { return; }
+  browse.addEventListener('click', function () {
+    var waiting = browse.textContent;
+    browse.disabled = true;
+    browse.textContent = 'Pick it in the window…';
+
+    var body = new FormData();
+    body.append('token', TOKEN);
+    body.append('at', box.value.trim());
+    fetch('/knowledge/files/native', {method: 'POST', body: body})
+      .then(function (r) { return r.json(); })
+      .then(function (data) {
+        browse.disabled = false;
+        browse.textContent = waiting;
+        if (data.trouble) { openList(box.value.trim()); return; }
+        if (data.path) { box.value = data.path; }
+      })
+      .catch(function () {
+        browse.disabled = false;
+        browse.textContent = waiting;
+        openList(box.value.trim());
+      });
+  });
+
+  /* --- the fallback list, which shows files as well as folders --------- */
+  var picker = document.getElementById('filepicker');
+  var list = document.getElementById('filepickerlist');
+  var where = document.getElementById('filepickerwhere');
+  var trouble = document.getElementById('filepickertrouble');
+  var here = '';
+  var above = null;
+
+  function openList(at) {
+    if (!picker || !picker.showModal) { return; }
+    if (!picker.open) { picker.showModal(); }
+    draw(at);
+  }
+
+  function draw(at) {
+    var body = new FormData();
+    body.append('token', TOKEN);
+    body.append('at', at || '');
+    fetch('/knowledge/files', {method: 'POST', body: body})
+      .then(function (r) { return r.json(); })
+      .then(function (data) {
+        here = data.here;
+        above = data.up;
+        where.textContent = data.label;
+        trouble.textContent = data.trouble || '';
+        trouble.hidden = !data.trouble;
+        document.getElementById('filepickerup').disabled = data.up === null;
+        list.textContent = '';
+
+        (data.folders || []).forEach(function (folder) {
+          var row = document.createElement('button');
+          row.type = 'button';
+          row.className = 'pickerrow';
+          row.textContent = '▸ ' + folder.name;
+          row.addEventListener('click', function () { draw(folder.path); });
+          list.appendChild(row);
+        });
+        /* Files after folders, and marked, because a list that mixes the two
+           makes you read every line to find out which is which. */
+        (data.files || []).forEach(function (file) {
+          var row = document.createElement('button');
+          row.type = 'button';
+          row.className = 'pickerrow isfile';
+          row.textContent = file.name;
+          row.addEventListener('click', function () {
+            box.value = file.path;
+            picker.close();
+          });
+          list.appendChild(row);
+        });
+
+        if (!(data.folders || []).length && !(data.files || []).length
+            && !data.trouble) {
+          var none = document.createElement('p');
+          none.className = 'sub';
+          none.textContent = 'Nothing in here.';
+          list.appendChild(none);
+        }
+        list.scrollTop = 0;
+      })
+      .catch(function () {
+        trouble.hidden = false;
+        trouble.textContent =
+          'The dashboard did not answer. Type the path instead.';
+      });
+  }
+
+  if (picker) {
+    document.getElementById('filepickerup').addEventListener('click',
+      function () { if (above !== null) { draw(above); } });
+  }
+})();
+</script>
+
+<dialog id="filepicker">
+  <form method="dialog" class="pickerhead">
+    <b>Pick a file</b>
+    <button value="cancel">Close</button>
+  </form>
+  <p class="freshness" id="filepickerwhere">This computer</p>
+  <p class="note" id="filepickertrouble" hidden></p>
+  <div class="pickerlist" id="filepickerlist"></div>
+  <div class="row tight">
+    <button type="button" id="filepickerup">Up</button>
+  </div>
+</dialog>
+
+{% endblock %}

@@ -1,0 +1,22 @@
+{% extends "base.html" %}
+{% block titlemode %}page{% endblock %}
+{% block title %}Update{% endblock %}
+{% block heading %}Update{% endblock %}
+{% block body %}
+
+{% if ok %}
+  <div class="said">Updated. The dashboard has stopped so that the new version
+    is what starts next time &mdash; open it again from your launcher.</div>
+{% else %}
+  <div class="note">Nothing was changed.</div>
+{% endif %}
+
+<div class="card"><pre>{% for line in lines %}{{ line }}
+{% endfor %}</pre></div>
+
+{% if ok %}
+  <p class="freshness">Restart Claude Code as well, so it picks up the new
+    skills.</p>
+{% endif %}
+
+{% endblock %}

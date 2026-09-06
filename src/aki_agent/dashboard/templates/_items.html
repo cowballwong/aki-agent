@@ -1,0 +1,245 @@
+{#
+  Every project in a workspace, as cards.
+
+
+  It was a table until now, which was the right shape while this page was a
+  list of rows with columns of fields. It is not that any more: what a person
+  does here is open one, star one, rename one, add one, remove one -- five
+  verbs, none of which a table is good at.
+
+  ONE FORM AROUND EVERYTHING, and every button names its own action.
+  Add, remove, pin and rename all post from here, and a form cannot be nested
+  inside another form -- so `formaction` on the button is what keeps four
+  destinations reachable from one form. Each button also carries whichever
+  value it needs as its own name/value pair, which is the part that lets a
+  single shared form act on the one card that was pressed.
+
+  Shared by the front page (which shows it directly when there is only one
+  workspace) and the workspace page, so the two can never drift into showing
+  the same data two different ways.
+#}
+{% set space_name = name if name is defined else '' %}
+
+<form method="post" action="/item/rename" id="renameitems">
+<input type="hidden" name="token" value="{{ token }}">
+<input type="hidden" name="back" value="{{ request.path }}">
+<input type="hidden" name="workspace" value="{{ space_name }}">
+{# Filled by the prompt before a removal is submitted. `/item/remove` checks
+   it against the folder name, and that check is the reason the prompt asks
+   for the name rather than for a yes. #}
+<input type="hidden" name="confirm" id="itconfirm" value="">
+
+<div class="wstools">
+  <button type="button" class="wsbtn" id="itedit">Edit</button>
+  <button type="submit" class="wsbtn primary" id="itsave" hidden>Save names</button>
+  <button type="button" class="wsbtn" id="itcancel" hidden>Done</button>
+  <button type="submit" class="wsbtn" id="itrefresh"
+          formaction="/item/refresh"
+          title="Take each name from its folder. For when you renamed the
+                 folders somewhere else.">Refresh from folders</button>
+  <span class="wshint" id="ithint" hidden>Rename in the boxes and press Save,
+    or press &minus; to retire one. Folders are never deleted.</span>
+</div>
+
+{# Sorted by the name on screen. The numbers people put in front of these
+   (`01_`, `02_`) exist to produce exactly this order in a file manager. #}
+<div class="favourites">
+  {% for item in items|sort(attribute='title') %}
+    <div class="favour itcard{{ ' pinned' if pinned.get(item.key) }}">
+      <span class="favourhead">
+        <a class="itname" href="/item/{{ item.key|urlencode }}">{{ item.title }}</a>
+        <input type="hidden" name="was" value="{{ item.key }}">
+        <input type="text" class="itedit" name="to" value="{{ item.title }}"
+               aria-label="New name for {{ item.title }}" hidden>
+
+        {# The star is the pin. and it was already this control in the table, so it keeps
+           its route and its meaning and only changes where it sits. #}
+        <button type="submit" class="pin{{ ' on' if pinned.get(item.key) }}"
+                formaction="/projects/pin" name="key" value="{{ item.key }}"
+                title="{{ 'On Today. Press to take it off.'
+                          if pinned.get(item.key) else 'Put this on Today.' }}"
+                aria-label="{{ 'Unpin' if pinned.get(item.key) else 'Pin' }} {{ item.title }}"
+        >{{ '★' if pinned.get(item.key) else '☆' }}</button>
+
+        <button type="submit" class="itdrop" hidden
+                formaction="/item/remove" name="folder" value="{{ item.path.name }}"
+                data-what="{{ item.path.name }}"
+                title="Retire this {{ schema.item_label|lower }}"
+                aria-label="Remove {{ item.title }}">&minus;</button>
+      </span>
+
+      {% if item.has_problems %}
+        <span class="pill bad"
+              title="Something in this folder could not be read">needs a look</span>
+      {% endif %}
+
+      {# HOW THIS PROJECT IS DOING, on the front of the card. The maintainer,
+         2026-09-05: -- and his cards were blank, because all this carried was
+         schema fields and his are empty.
+
+         The same three things the favourite cards on Today show, from the
+         same files: the opening line of `state`, what is open, what is
+         waiting. Two shapes for one thing is how somebody stops recognising
+         it. #}
+      {% set state_line = (item.sections.get('state') or '').strip().splitlines() %}
+      {% if state_line %}
+        <span class="itnote">{{ state_line[0][:120] }}</span>
+      {% endif %}
+
+      {% set opens = item.sections.get('actions') | lines_starting('- [ ]') %}
+      {% set waits = item.sections.get('waiting') | lines_starting('- ') %}
+      <span class="itcounts">
+        {% if opens %}<span>{{ opens }} open</span>{% endif %}
+        {% if waits %}<span>{{ waits }} waiting</span>{% endif %}
+        {% if not opens and not waits %}<span class="quiet">nothing open</span>{% endif %}
+        {% if item.last_modified %}
+          <span class="when">{{ item.last_modified.strftime('%d %b') }}</span>
+        {% endif %}
+      </span>
+
+      {# The fields the table used to carry, kept rather than dropped: a card
+         that says less than the table it replaced is a redesign that lost
+         information. Only the ones with something in them -- a row of "--"
+         was the table's own worst habit. #}
+      <span class="itfields">
+        {% for field in schema.fields %}
+          {% set value = item.values.get(field.key) %}
+          {% if value is not none and value.ok and value.present %}
+            <span class="itfield">
+              <b>{{ field.label }}</b>
+              {% if field.type == 'percent' %}
+                <span class="bar"><span style="width: {{ value.value }}%"></span></span>
+              {% endif %}
+              {{ value.display }}
+            </span>
+          {% endif %}
+        {% endfor %}
+      </span>
+    </div>
+  {% endfor %}
+
+  {# The empty card, the same one Today uses to add a favourite. #}
+  <div class="favour addcard" id="additem">
+    <button type="button" class="addopen" id="additemopen">
+      <span class="plus" aria-hidden="true">+</span>
+      <span class="addsays">Add {{ schema.item_label|lower }}</span>
+    </button>
+    <span class="addfields" id="additemfields" hidden>
+      <input type="text" name="name" id="additemname"
+             placeholder="{{ schema.item_label }} name"
+             aria-label="Name for the new {{ schema.item_label|lower }}">
+      <button type="submit" class="wsbtn primary" formaction="/item/new"
+              id="additemgo">Add</button>
+    </span>
+  </div>
+</div>
+</form>
+
+<script>
+/* Edit mode, the star, the minus and the plus -- four buttons on one form.
+
+   Every one of them is a submit, so the single submit handler has to know
+   which arrived. `e.submitter` is that, and each button is identified by the
+   class or id it already needs for its own styling. */
+(function () {
+  var form = document.getElementById('renameitems');
+  var edit = document.getElementById('itedit');
+  var save = document.getElementById('itsave');
+  var done = document.getElementById('itcancel');
+  var hint = document.getElementById('ithint');
+  if (!form || !edit || !save) { return; }
+
+  var fields = [].slice.call(form.querySelectorAll('.itedit'));
+  var labels = [].slice.call(form.querySelectorAll('.itname'));
+  var drops = [].slice.call(form.querySelectorAll('.itdrop'));
+  var pins = [].slice.call(form.querySelectorAll('.pin'));
+
+  function mode(on) {
+    fields.forEach(function (one) { one.hidden = !on; });
+    labels.forEach(function (one) { one.hidden = on; });
+    drops.forEach(function (one) { one.hidden = !on; });
+    /* The star shares this form, and Enter in a name box would otherwise
+       submit through whichever button the browser felt like. */
+    pins.forEach(function (one) { one.disabled = on; });
+    form.classList.toggle('editing', on);
+    edit.hidden = on;
+    save.hidden = !on;
+    done.hidden = !on;
+    hint.hidden = !on;
+    if (on && fields[0]) { fields[0].focus(); fields[0].select(); }
+  }
+
+  edit.addEventListener('click', function () { mode(true); });
+  done.addEventListener('click', function () {
+    fields.forEach(function (one) { one.value = one.defaultValue; });
+    mode(false);
+  });
+
+  /* The plus card opens into its own field rather than a dialog: one name is
+     not worth a modal, and the card is already the right size for it. */
+  var open = document.getElementById('additemopen');
+  var box = document.getElementById('additemfields');
+  var newname = document.getElementById('additemname');
+  if (open && box) {
+    open.addEventListener('click', function () {
+      open.hidden = true;
+      box.hidden = false;
+      if (newname) { newname.focus(); }
+    });
+  }
+
+  form.addEventListener('submit', function (e) {
+    var who = e.submitter;
+    if (!who) { return; }
+
+    /* The star and Refresh act on their own and ask nothing. */
+    if (who.classList.contains('pin')) { return; }
+    if (who.id === 'itrefresh') { return; }
+
+    /* Adding needs a name and nothing else. */
+    if (who.id === 'additemgo') {
+      if (!newname || !newname.value.trim()) { e.preventDefault(); }
+      return;
+    }
+
+    /* Removing asks twice, and the second question is the folder name --
+       which is also what the server checks, so a wrong answer is refused
+       there as well as here. */
+    if (who.classList.contains('itdrop')) {
+      var what = who.getAttribute('data-what') || '';
+      if (!window.confirm(
+          'Retire ' + what + '?\n\nIt is moved into the sandbox under ' +
+          '_removed, not deleted.')) {
+        e.preventDefault();
+        return;
+      }
+      var typed = window.prompt(
+        'Type the folder name to confirm:\n\n  ' + what);
+      var slot = document.getElementById('itconfirm');
+      if (typed === null) { e.preventDefault(); return; }
+      if (slot) { slot.value = typed; }
+      return;
+    }
+
+    /* What is left is Save. */
+    var changes = fields
+      .map(function (one) { return [one.defaultValue, one.value.trim()]; })
+      .filter(function (pair) { return pair[1] && pair[1] !== pair[0]; });
+
+    if (!changes.length) {
+      e.preventDefault();
+      mode(false);
+      return;
+    }
+    var says = changes.map(function (pair) {
+      return '  ' + pair[0] + '  -> ' + pair[1];
+    }).join('\n');
+    if (!window.confirm(
+        'Rename ' + changes.length + (changes.length === 1 ? ' item?' : ' items?') +
+        '\n\n' + says +
+        '\n\nThe folders on disk are renamed too.')) {
+      e.preventDefault();
+    }
+  });
+})();
+</script>

@@ -1,0 +1,10 @@
+{% extends "base.html" %}
+{% block titlemode %}page{% endblock %}
+{% block heading %}Setup needed{% endblock %}
+{% block body %}
+<div class="card">
+  <p>{{ message }}</p>
+  <p>In Claude Code, type <b>/setup</b>. It takes about fifteen minutes and asks
+     you about yourself and your work.</p>
+</div>
+{% endblock %}

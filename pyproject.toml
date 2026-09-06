@@ -1,0 +1,139 @@
+# Dependency manifest.
+#
+# WHY THIS FILE IS WRITTEN CAREFULLY
+# ----------------------------------
+# The system this package derives from declared three packages in its manifest
+# while its dashboard imported at least nine. The consequence was not subtle:
+# a new user's very first install command succeeded, and then the software
+# crashed on an import error the moment they ran it.
+#
+# So the rules here are:
+#
+#   1. Every version below was verified by installing it, on 2026-08-16,
+#      on Windows with Python 3.13. None of them is a guess.
+#   2. Required means "the software cannot start without it". Everything else
+#      is an optional extra, so that a student who only wants the agent is not
+#      made to install a web framework.
+#   3. `doctor` checks the same list. If you add an import, add it here AND to
+#      REQUIRED_PACKAGES or OPTIONAL_PACKAGES in doctor.py -- and the reason
+#      it is needed, in plain words, because that reason is what the user
+#      reads when it is missing.
+
+[project]
+# The product is called "Aki Agent" (decided 2026-08-16). The
+# distribution name is the hyphenated form; the Python package underneath is
+# `aki_agent`; the per-user folder is `.aki-agent`, set by
+# APP_DIR_NAME in src/aki_agent/paths.py. All three agree on purpose.
+name = "aki-agent"
+version = "0.47.0"
+description = "A general-purpose personal AI agent you install on your own machine."
+requires-python = ">=3.10"
+license = { text = "MIT" }
+
+# Lower bounds, not exact pins.
+#
+# Exact pins ("==") are right for an application deployed to a server you
+# control. They are wrong here: a student may already have one of these
+# installed for something else, and an exact pin would force a downgrade and
+# break their other work. Lower bounds with a tested upper limit is the honest
+# middle -- it says "this is what we tested" without seizing their machine.
+dependencies = [
+    "PyYAML>=6.0,<7",
+]
+
+[project.optional-dependencies]
+# Notifications on a phone. Web push needs ECDSA P-256 for VAPID and
+# ECDH + HKDF + AES128GCM for the payload, none of which is in the standard
+# library and none of which should ever be hand-written. Kept OPTIONAL so the
+# core install stays at one runtime dependency: without it the app still
+# installs and the panel still works, and asking to be notified says plainly
+# what is missing.
+push = [
+    "pywebpush>=2.0,<3",
+]
+
+
+# The dashboard. Flask pulls in Jinja2, Werkzeug, click, itsdangerous,
+# blinker and MarkupSafe -- all listed explicitly rather than left implicit,
+# because "it worked on my machine because something else installed it" is
+# precisely the failure being avoided.
+dashboard = [
+    "Flask>=3.1,<4",
+    "Jinja2>=3.1,<4",
+    "Werkzeug>=3.1,<4",
+    "click>=8.1",
+    "itsdangerous>=2.2",
+    "blinker>=1.9",
+    "MarkupSafe>=3.0",
+]
+
+# Storing secrets in the operating system's password manager.
+secrets = [
+    "keyring>=25.0,<26",
+]
+
+# Checking on the assistant's own process: is it running, did the restart
+# actually work, is this one mine or somebody else's?
+session = [
+    "psutil>=7.0,<8",
+]
+
+# The dashboard's chat box, signed in as the user.
+#
+# WHY A REAL TELEGRAM CLIENT AND NOT A MIRROR (Anzon, 2026-08-20)
+# ---------------------------------------------------------------
+# The dashboard used to keep its own copy of the conversation and rely on the
+# assistant to keep the two in step. It lagged, it disagreed with the session,
+# and it was the wrong shape. Signed in as the user, the dashboard sends a
+# real Telegram message and reads the real history -- one conversation, and
+# the panel is a client of it.
+#
+# The cost is real and was accepted deliberately: an api_id/api_hash from
+# my.telegram.org, and the person signing in with their own account. Put to
+# him plainly; his answer was to build it and not to make it optional.
+chat = [
+    "Telethon>=1.36,<2",
+]
+
+# Everything a normal installation wants.
+full = [
+    "Flask>=3.1,<4",
+    "Jinja2>=3.1,<4",
+    "Werkzeug>=3.1,<4",
+    "click>=8.1",
+    "itsdangerous>=2.2",
+    "blinker>=1.9",
+    "MarkupSafe>=3.0",
+    "keyring>=25.0,<26",
+    "psutil>=7.0,<8",
+    "Telethon>=1.36,<2",
+]
+
+# For working on the package itself. Students do not need this.
+dev = [
+    "pytest>=8.0",
+]
+
+[project.scripts]
+# So that these work after an install, for anyone who does reach for a
+# terminal. The launchers in bin/ are the route for everyone else.
+aki-agent-doctor = "aki_agent.doctor:main"
+aki-agent-dashboard = "aki_agent.dashboard.app:main"
+
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+# The dashboard's HTML templates are not Python, so setuptools would leave
+# them out of an install and the dashboard would start and then fail to render
+# anything. This is the single most commonly forgotten line in a Python
+# package that ships templates.
+[tool.setuptools.package-data]
+aki_agent = ["dashboard/templates/*.html"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["src"]

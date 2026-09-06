@@ -1,0 +1,49 @@
+{% extends "base.html" %}
+{% block titlemode %}page{% endblock %}
+{% block heading %}{{ guide.title }}{% endblock %}
+{% block body %}
+
+{#
+  A full page rather than a modal, on purpose. Half the reasons somebody opens
+  a set-up guide are reasons they will want it open beside the form they are
+  filling in, on a second tab, or printed. A modal is the one shape that
+  cannot do any of those.
+#}
+
+<p class="muted">
+  {% if guide.minutes %}About {{ guide.minutes }} minutes.{% else %}This takes a moment.{% endif %}
+</p>
+
+{% if guide.why %}<p>{{ guide.why }}</p>{% endif %}
+
+<pre class="guide-steps">{{ body }}</pre>
+
+{% if guide.gotchas %}
+<h3>Worth knowing</h3>
+<ul>
+  {% for note in guide.gotchas %}<li>{{ note }}</li>{% endfor %}
+</ul>
+{% endif %}
+
+{% if guide.undo %}
+<p><strong>To undo it:</strong> {{ guide.undo }}</p>
+{% endif %}
+
+{% if guide.links %}
+<h3>Links</h3>
+<ul>
+  {% for label, url in guide.links %}
+  <li><a href="{{ url }}" target="_blank" rel="noreferrer noopener">{{ label }}</a></li>
+  {% endfor %}
+</ul>
+{% endif %}
+
+<p class="muted" style="margin-top:1.4rem">
+  Also available without a browser:
+  <code>aki-agent guide {{ guide.topic }}</code>
+</p>
+
+<p><a href="{{ url_for('connections') }}">← Back to connections</a>
+   &nbsp;·&nbsp; <a href="{{ url_for('guides_index') }}">All guides</a></p>
+
+{% endblock %}

@@ -1,0 +1,72 @@
+<h2><span class="ico">&#9673;</span>What is running</h2>
+<div class="card">
+  {% if marker %}
+    <div>Last launched: <span class="blank">{{ marker.launcher }}</span></div>
+    <div>Process: <span class="blank">{{ marker.pid }}</span></div>
+  {% else %}
+    <p class="empty">Nothing has recorded a launch yet.</p>
+  {% endif %}
+</div>
+
+<h2><span class="ico">&#9673;</span>Session guard</h2>
+<div class="card">
+  <p class="freshness">{{ watch.sentence() }}</p>
+
+  <table class="guard">
+    {% for one in watch.conditions %}
+    <tr class="{{ '' if one.decides else 'dim' }}">
+      <td>
+        {% if not one.decides %}<span class="badge">noted</span>
+        {% elif one.met %}<span class="badge on">met</span>
+        {% else %}<span class="badge warn">no</span>{% endif %}
+      </td>
+      <td><b>{{ one.name }}</b> <span class="blank">{{ one.detail }}</span></td>
+      <td class="num">{{ one.reading() }}</td>
+    </tr>
+    {% endfor %}
+  </table>
+
+  <p class="freshness">{{ footer }}</p>
+</div>
+
+<h2><span class="ico">&#9719;</span>Recycling</h2>
+<div class="card">
+  <form method="post" action="/sessions/recycling">
+    <input type="hidden" name="token" value="{{ token }}">
+    <label class="chip">
+      <input type="checkbox" name="auto_recycle"
+             {{ 'checked' if switches.auto_recycle }}> Auto-recycle
+    </label>
+    <div class="row">
+      <label class="chip">
+        <input type="checkbox" name="nightly_recycle"
+               {{ 'checked' if switches.nightly_recycle }}> Nightly
+      </label>
+      <label>at
+        <input name="recycle_hour" type="number" min="0" max="23"
+               value="{{ switches.recycle_hour }}"> :00
+      </label>
+    </div>
+    <button type="submit">Save</button>
+  </form>
+
+  <form method="post" action="/sessions/recycle-now" class="inline"
+        onsubmit="return confirm('Restart the session now?\n\nIt saves where you are first, then restarts even if the session is busy.')">
+    <input type="hidden" name="token" value="{{ token }}">
+    <button type="submit" class="danger">&#9658; Recycle now</button>
+  </form>
+
+  <p class="freshness">
+    {% if advice.safe %}<span class="badge on">safe</span>{% else %}<span class="badge warn">not now</span>{% endif %}
+    {{ advice.reason }}
+  </p>
+  <p class="freshness">
+    The badge above is what the AUTOMATIC recycle goes by. The button is not
+    bound by it: pressing it, and confirming, restarts the session even while
+    it is busy. Where you are is written down first.
+  </p>
+  <p class="sub">The order is not negotiable:</p>
+  <ol class="sub">
+    {% for step in order %}<li>{{ step }}</li>{% endfor %}
+  </ol>
+</div>

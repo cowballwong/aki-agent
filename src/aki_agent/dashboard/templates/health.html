@@ -1,0 +1,78 @@
+{% extends "base.html" %}
+{% block heading %}Health{% endblock %}
+{% block body %}
+
+{% if note %}<div class="note">{{ note }}</div>{% endif %}
+
+<div class="card">
+  <form method="post" action="/health/repair"
+        onsubmit="return confirm('Re-point everything and update your notes?\n\nNothing you have written is changed.');">
+    <input type="hidden" name="token" value="{{ token }}">
+    <button type="submit" class="primary">Repair</button>
+    <p class="freshness">
+      Fixes most of what this page complains about: re-points the launcher and
+      the scheduled work at the version installed now, and brings the
+      instructions in your workspace notes up to date. Your own writing is not
+      touched, and nothing runs that was not already running.
+    </p>
+  </form>
+</div>
+
+
+<div class="card versioncard">
+  <div>
+    <span class="cardlabel">This assistant</span>
+    <b class="cardvalue">v{{ version }}</b>
+    <span class="count">
+      {% if engine_here %}running from your own folder{% else %}
+        still running from the folder you installed from{% endif %}
+    </span>
+  </div>
+
+  <div class="versionact">
+    {% if available and available != version %}
+      <p><b>v{{ available }}</b> is waiting in<br>
+        <span class="mono">{{ available_from }}</span></p>
+      <form method="post" action="/update"
+            onsubmit="return confirm('Update to v{{ available | js }}?\n\nThe dashboard will stop when it finishes, and you reopen it from your launcher.');">
+        <input type="hidden" name="token" value="{{ token }}">
+        <button type="submit" class="primary">Update now</button>
+      </form>
+    {% elif available %}
+      <p class="empty">Nothing newer found &mdash; the copy in
+        <span class="mono">{{ available_from }}</span> is the same version.</p>
+    {% else %}
+      <p class="empty">{{ update_problem or "No newer release found." }}</p>
+    {% endif %}
+  </div>
+</div>
+
+<p class="freshness">Checked at {{ read_at.strftime('%H:%M:%S') }}.</p>
+
+<table>
+  <thead><tr><th></th><th>Check</th><th>Detail</th></tr></thead>
+  <tbody>
+  {% for check in checks %}
+    <tr>
+      <td>
+        {% if check.ok %}<span class="pill ok">ok</span>
+        {% elif check.warning_only %}<span class="pill warn">note</span>
+        {% else %}<span class="pill bad">fix</span>{% endif %}
+      </td>
+      <td>{{ check.name }}</td>
+      <td>
+        {% if check.detail %}<div>{{ check.detail }}</div>{% endif %}
+        {% if not check.ok and check.fix %}
+          {# A command line is the wrong currency for somebody who does not
+             open a terminal -- which is everybody this package is for. So the
+             common fixes are a button, and the command is kept underneath for
+             anyone who does want it. #}
+          <div class="blank">{{ check.fix }}</div>
+        {% endif %}
+      </td>
+    </tr>
+  {% endfor %}
+  </tbody>
+</table>
+
+{% endblock %}

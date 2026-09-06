@@ -1,0 +1,12 @@
+{% extends "base.html" %}
+{% block heading %}Inbox{% endblock %}
+{% block body %}
+<p class="freshness">Decisions it cannot make alone.</p>
+
+{% include "_waiting.html" %}
+
+{# Notifications used to be a second section here, split out on 2026-08-21.
+   The merge was mine: waiting-for-a-decision and
+   deciding-when-to-be-interrupted are two different questions, and only one
+   of them is about a queue. #}
+{% endblock %}

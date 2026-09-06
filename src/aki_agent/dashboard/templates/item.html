@@ -1,0 +1,43 @@
+{% extends "base.html" %}
+{% block titlemode %}page{% endblock %}
+{% block title %}{{ item.title }}{% endblock %}
+{% block back %}<a class="back"
+  href="{{ ('/workspace/' + item.workspace) if item.workspace else '/' }}"
+  >&larr; Back</a>{% endblock %}
+{% block body %}
+
+<h2>{{ item.title }}</h2>
+<p class="freshness">
+  {{ item.path }}
+  {% if item.last_modified %} &middot; last changed {{ item.last_modified.strftime('%d %b %Y, %H:%M') }}{% endif %}
+</p>
+
+{% for problem in item.problems %}<div class="note">{{ problem }}</div>{% endfor %}
+{% for problem in item.value_problems() %}<div class="note">{{ problem }}</div>{% endfor %}
+{% if item.missing_files %}
+  <div class="note">Not found in this folder: {{ item.missing_files|join(', ') }}</div>
+{% endif %}
+
+<div class="card">
+  <table>
+    <tbody>
+    {% for key, value in item.values.items() %}
+      <tr>
+        <th style="width: 30%">{{ value.field.label }}</th>
+        <td>
+          {% if not value.ok %}<span class="broken" title="{{ value.problem }}">?</span>
+          {% elif not value.present %}<span class="blank">--</span>
+          {% else %}{{ value.display }}{% endif %}
+        </td>
+      </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+</div>
+
+{% for name, text in item.sections.items() %}
+  <h2>{{ name }}</h2>
+  {% if text %}<pre>{{ text }}</pre>{% else %}<p class="empty">Empty.</p>{% endif %}
+{% endfor %}
+
+{% endblock %}

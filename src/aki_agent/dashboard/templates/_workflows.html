@@ -1,0 +1,114 @@
+{# Asked for on 2026-09-05: the installed workflows as a list, each with
+   on, off and remove.
+
+   A table of five columns became rows of a name and three controls, the same
+   shape the Skills and Knowledge lists took the same evening. Everything the
+   table spread across columns -- what it holds, what it produces, its gates --
+   is behind Open, because none of it is what you are looking for when you are
+   scanning the list. #}
+{% if workflows %}
+<div class="stack">
+  {% for one in workflows %}
+    <div class="rowitem">
+      <div class="rowhead">
+        <b>{{ one.title or one.name }}</b>
+        {% if one.version %}<span class="pill">{{ one.version }}</span>{% endif %}
+        {% if one.from_plugin %}<span class="pill">from a plugin</span>{% endif %}
+
+        {% if one.problem %}
+          {# Installed and unrunnable is its own state. Hiding it would make
+             the software look like it does not have something it is
+             carrying. Same call as the plugins panel. #}
+          <span class="pill warn">cannot run</span>
+        {% elif not one.on %}
+          <span class="pill">off</span>
+        {% elif one.entry %}
+          <span class="pill ok">ready</span>
+        {% else %}
+          <span class="pill">reference only</span>
+        {% endif %}
+
+        <span class="rowacts">
+          {# The switch first, because it is the one control every row has.
+             Run needs an entry, and Remove is refused on a plugin's. #}
+          <form method="post" action="/workflows/switch" class="inline">
+            <input type="hidden" name="token" value="{{ token }}">
+            <input type="hidden" name="name" value="{{ one.name }}">
+            <input type="hidden" name="state" value="{{ 'off' if one.on else 'on' }}">
+            <button type="submit" class="state {{ 'on' if one.on }}"
+                    title="{{ 'Stop it being run' if one.on
+                              else 'Let it be run again' }}">
+              {{ 'on' if one.on else 'off' }}
+            </button>
+          </form>
+
+          {% if one.entry and not one.problem and one.on %}
+            {# Was `class="removes"`, so Run asked whether to REMOVE it. #}
+            <form method="post" action="/workflows/run" class="inline"
+                  data-confirm="Run the {{ one.name | js }} workflow?"
+                  data-consequence="Its code runs as you, on this computer.">
+              <input type="hidden" name="token" value="{{ token }}">
+              <input type="hidden" name="name" value="{{ one.name }}">
+              <button type="submit">Run</button>
+            </form>
+          {% endif %}
+
+          {# NOT OFFERED ON A PLUGIN'S. `remove()` is `rmtree(one.path)`, and
+             a plugin's workflow lives inside that plugin -- so this button
+             used to delete a piece out of the middle of somebody's plugin.
+             The route refuses it as well; this only stops the offer being
+             made. #}
+          {% if not one.from_plugin %}
+            <form method="post" action="/workflows/remove" class="inline"
+                  data-confirm="Remove the {{ one.name | js }} workflow?"
+                  data-consequence="Its folder is deleted. This cannot be undone.">
+              <input type="hidden" name="token" value="{{ token }}">
+              <input type="hidden" name="name" value="{{ one.name }}">
+              <button type="submit">Remove</button>
+            </form>
+          {% endif %}
+        </span>
+      </div>
+
+      <details class="rowmore">
+        <summary>Open</summary>
+        {% if one.description %}
+          <p class="freshness">{{ one.description }}</p>
+        {% endif %}
+        {% if one.problem %}
+          <div class="blank warn">{{ one.problem }}</div>
+        {% elif not one.entry %}
+          <p class="freshness">No entry declared, so it can be read but not
+            run from here.</p>
+        {% endif %}
+        <p class="freshness">
+          Holds
+          {% if one.counts %}
+            {% for kind, n in one.counts.items() %}{{ n }} {{ kind }}{% if not loop.last %}, {% endif %}{% endfor %}
+          {% else %}nothing it declares{% endif %}
+          {% if one.deliverable %} &middot; produces <code>{{ one.deliverable }}</code>{% endif %}
+        </p>
+        {% if one.gates %}
+          <p class="freshness">Sign-off gates: {{ one.gates|join(', ') }}</p>
+        {% endif %}
+        {% if one.requires %}
+          <p class="freshness">Needs: {{ one.requires|join(', ') }}</p>
+        {% endif %}
+        <p class="freshness"><code>{{ one.path }}</code></p>
+      </details>
+    </div>
+  {% endfor %}
+</div>
+{% else %}
+  <p class="empty">Nothing installed yet. A workflow is a folder with a
+    <code>WORKFLOW.md</code> in it.</p>
+{% endif %}
+
+{% if workflow_problems %}
+  <div class="card">
+    <b>Folders that are not workflows</b>
+    <ul>{% for p in workflow_problems %}<li class="warn">{{ p }}</li>{% endfor %}</ul>
+    <p class="freshness">Reported rather than ignored: somebody who unzipped one
+      level too deep should be told, not left wondering why nothing appeared.</p>
+  </div>
+{% endif %}

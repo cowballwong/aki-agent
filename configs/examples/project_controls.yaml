@@ -1,0 +1,58 @@
+schema_version: 1
+assistant:
+  name: Mira
+  tone: Direct and practical. Flag risk early. British English.
+  colour: '#8A6F4E'
+  logo: ▲
+user:
+  name: Sam Okafor
+  identity_aliases:
+  - Sam Okafor
+  timezone: Europe/London
+  languages:
+  - en
+  occupation: Architect running projects on site — programme and cost
+  working_days:
+  - MON
+  - TUE
+  - WED
+  - THU
+  - FRI
+  working_from: 09:00
+  working_to: '17:30'
+layout:
+  root: "../../tests/fixtures/workspace_controls"
+  item_label: Project
+  item_label_plural: Projects
+  summary_files:
+  - state
+  fields:
+  - key: stage
+    label: Work stage
+    type: enum
+    values:
+    - feasibility
+    - concept
+    - developed
+    - technical
+    - construction
+    - handover
+    source: frontmatter
+  - key: completion
+    label: Complete
+    type: percent
+    source: frontmatter
+  - key: client
+    label: Client
+    type: text
+    source: frontmatter
+  - key: next_deadline
+    label: Next deadline
+    type: date
+    source: frontmatter
+  - key: on_site
+    label: On site
+    type: bool
+    source: frontmatter
+notifications:
+  enabled: false

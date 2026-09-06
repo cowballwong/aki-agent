@@ -1,0 +1,56 @@
+<p class="freshness">Extra tools your assistant can reach — a browser, a
+  database, somebody's API. Servers you add here are written to
+  <code>{{ where.name }}</code> in your own folder, so they travel with the
+  assistant and you can read them.</p>
+
+{% if request.args.get('said') %}<div class="said">{{ request.args.get('said') }}</div>{% endif %}
+
+<table>
+  <thead><tr><th>Name</th><th>Runs</th><th>Where from</th><th></th></tr></thead>
+  <tbody>
+    {% for server in servers %}
+      <tr>
+        <td><b>{{ server.name }}</b></td>
+        <td class="mono">{{ server.describe() }}</td>
+        <td>
+          {% if server.editable %}<span class="pill ok">yours</span>
+          {% else %}<span class="pill">Claude Code</span>{% endif %}
+        </td>
+        <td>
+          {% if server.editable %}
+            <form method="post" action="/mcp/remove" class="inline"
+                  data-confirm="Remove the {{ server.name | js }} server?"
+                  data-consequence="It is taken out of the assistant's own .mcp.json. Claude Code's own servers are untouched.">
+              <input type="hidden" name="token" value="{{ token }}">
+              <input type="hidden" name="name" value="{{ server.name }}">
+              <button type="submit">Remove</button>
+            </form>
+          {% endif %}
+        </td>
+      </tr>
+    {% else %}
+      <tr><td colspan="4" class="empty">Nothing connected yet.</td></tr>
+    {% endfor %}
+  </tbody>
+</table>
+
+<p class="freshness">Servers marked <b>Claude Code</b> belong to Claude Code
+  itself and are shared with every project on this machine. They are shown
+  here so you know what your assistant can reach &mdash; this page will not
+  change them. Use <code>claude mcp remove</code> for those.</p>
+
+<h2 class="section">Add one</h2>
+
+<form method="post" action="/mcp/add">
+  <input type="hidden" name="token" value="{{ token }}">
+  <label>NAME</label>
+  <input type="text" name="name" placeholder="chrome-devtools" required>
+  <label>COMMAND</label>
+  <input type="text" name="command" placeholder="npx" required>
+  <label>ARGUMENTS</label>
+  <input type="text" name="args" placeholder="-y chrome-devtools-mcp@latest">
+  <button type="submit" class="primary">Add server</button>
+</form>
+
+<p class="freshness">Nothing changes until you <b>restart Claude Code</b> —
+  servers are read when a session starts.</p>

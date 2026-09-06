@@ -1,0 +1,205 @@
+{# The projects you chose, and one empty card to choose another with.
+
+
+
+   So: pinned cards, then the `+` card while there is room, and the pin
+   button on a project's own page keeps working. Both routes post to
+   `/projects/pin` -- two doors, one lock. #}
+{# ARRANGING THEM. and of the two shapes offered.
+
+   The order is the order of the pins, which is a list that already existed --
+   so this arranges that list rather than storing a second one. #}
+{% if favourites | length > 1 %}
+  <div class="wstools">
+    <button type="button" class="wsbtn" id="favedit">Arrange</button>
+    <button type="submit" class="wsbtn primary" id="favsave" form="arrangefav"
+            hidden>Save order</button>
+    <button type="button" class="wsbtn" id="favcancel" hidden>Cancel</button>
+    <span class="wshint" id="favhint" hidden>Move the cards with the arrows —
+      as many as you like — then Save.</span>
+  </div>
+{% endif %}
+
+<form method="post" action="/projects/arrange" id="arrangefav">
+<input type="hidden" name="token" value="{{ token }}">
+<input type="hidden" name="back" value="{{ request.path }}">
+<div class="favourites">
+  {% for card in favourites %}
+    {# `/item/<key>`, not `/item?key=` (fixed 2026-08-23). There is no bare
+       `/item` route, so every card on the landing page was a 404 -- the
+       correct form is one file away in `_items.html`. #}
+    <div class="favour favwrap">
+      <a class="favourbody" href="/item/{{ card.key|urlencode }}">
+      <span class="favourhead">
+        <b>{{ card.title }}</b>
+        {% if card.area %}<span class="pill">{{ card.area }}</span>{% endif %}
+      </span>
+      {% if card.note %}<span class="favournote">{{ card.note }}</span>{% endif %}
+      <span class="favourfoot">
+        {% if card.open_count %}<span>{{ card.open_count }} open</span>{% endif %}
+        {% if card.waiting_count %}<span>{{ card.waiting_count }} waiting</span>{% endif %}
+        {% if card.is_quiet %}<span class="quiet">nothing open</span>{% endif %}
+        {% if card.last_touched %}<span class="when">{{ card.last_touched }}</span>{% endif %}
+      </span>
+      </a>
+
+      {# Outside the anchor, because a button inside a link navigates instead
+         of submitting. Hidden until Arrange is pressed, and the one at each
+         end is disabled rather than absent -- a control that disappears makes
+         the row jump under your finger between presses. #}
+      <span class="favmove" hidden>
+        {# `name="order"`, one per card, so the browser sends the finished
+           sequence when Save is pressed -- the arrows only move the cards
+           about on the page.
+
+           `formaction`/`by` stay on the buttons as the fallback for a page
+           with no script: without JavaScript each arrow is still a submit
+           that moves one place, which is the behaviour that shipped an hour
+           ago and is better than a dead button. #}
+        <input type="hidden" name="order" value="{{ card.key }}">
+        <button type="submit" class="favarrow favleft" name="key"
+                value="{{ card.key }}" formaction="/projects/arrange"
+                onclick="this.form.by.value='-1'"
+                {{ 'disabled' if loop.first }}
+                aria-label="Move {{ card.title }} left">&larr;</button>
+        <button type="submit" class="favarrow favright" name="key"
+                value="{{ card.key }}" formaction="/projects/arrange"
+                onclick="this.form.by.value='1'"
+                {{ 'disabled' if loop.last }}
+                aria-label="Move {{ card.title }} right">&rarr;</button>
+      </span>
+    </div>
+  {% endfor %}
+  <input type="hidden" name="by" value="0">
+
+  {# One empty card, and only while there is room for what it would add.
+     At six it disappears rather than opening a picker that can only refuse:
+     a control that is always there and sometimes says no teaches people to
+     stop pressing it. #}
+  {% if favourites_pinned < favourites_max %}
+    <button type="button" class="favour addcard" id="addfavour"
+            {{ 'disabled' if not pickable }}
+            title="{{ 'Add a project to Today' if pickable
+                      else 'No projects to add yet' }}">
+      <span class="plus" aria-hidden="true">+</span>
+      <span class="addsays">
+        {% if pickable %}Add a project
+        {% else %}No projects yet{% endif %}
+      </span>
+    </button>
+
+  {% elif favourites_lost %}
+    {# FULL, BUT NOT WITH THINGS YOU CAN SEE.
+
+        -- five cards
+       on screen, six pins in the file, and the sixth pointing at a folder he
+       had renamed in Explorer. The `+` was correctly hidden at the cap and
+       the page gave no hint why, which reads as the button being broken.
+
+       A kept pin is deliberate: a cloud drive that has not mounted yet must
+       not cost somebody their whole row. So it is said out loud instead, with
+       the one action that fixes it. #}
+    <div class="favour addcard lostcard">
+      <span class="addsays">
+        {{ favourites_lost | length }} pinned
+        {{ 'project has' if favourites_lost | length == 1 else 'projects have' }}
+        no folder any more, so
+        {{ 'it is' if favourites_lost | length == 1 else 'they are' }}
+        holding {{ 'a place' if favourites_lost | length == 1 else 'places' }}
+        here without showing.
+      </span>
+      {% for key in favourites_lost %}
+        <button type="submit" class="wsbtn" formaction="/projects/pin"
+                name="key" value="{{ key }}"
+                title="Take {{ key }} off Today">Forget {{ key }}</button>
+      {% endfor %}
+    </div>
+  {% endif %}
+</div>
+</form>
+
+<script>
+/* Arrange mode: the arrows appear, Arrange becomes Done. Nothing else on the
+   card changes, so a card still opens while you are not arranging. */
+(function () {
+  var edit = document.getElementById('favedit');
+  var save = document.getElementById('favsave');
+  var cancel = document.getElementById('favcancel');
+  var hint = document.getElementById('favhint');
+  var grid = document.querySelector('#arrangefav .favourites');
+  if (!edit || !save || !grid) { return; }
+
+  /* The order to put back if Cancel is pressed. Taken once, before anything
+     moves, because after the first swap the page no longer knows what it
+     started as. */
+  var original = [].slice.call(grid.querySelectorAll('.favwrap'));
+
+  function cards() {
+    return [].slice.call(grid.querySelectorAll('.favwrap'));
+  }
+
+  function mode(on) {
+    cards().forEach(function (card) {
+      var moves = card.querySelector('.favmove');
+      var body = card.querySelector('.favourbody');
+      if (moves) { moves.hidden = !on; }
+      /* The card underneath stays a link; while arranging, a press should
+         move it rather than open it. */
+      if (body) { body.style.pointerEvents = on ? 'none' : ''; }
+      card.classList.remove('moving');
+    });
+    edit.hidden = on;
+    save.hidden = !on;
+    cancel.hidden = !on;
+    hint.hidden = !on;
+  }
+
+  /* Which arrows are dead depends on where each card is NOW, so it is
+     recalculated after every move rather than being decided by the server
+     when the page was built. */
+  function ends() {
+    var all = cards();
+    all.forEach(function (card, index) {
+      var left = card.querySelector('.favleft');
+      var right = card.querySelector('.favright');
+      if (left) { left.disabled = index === 0; }
+      if (right) { right.disabled = index === all.length - 1; }
+    });
+  }
+
+  grid.addEventListener('click', function (e) {
+    var arrow = e.target.closest ? e.target.closest('.favarrow') : null;
+    if (!arrow || arrow.disabled) { return; }
+
+    /* Handled here, so nothing is submitted and nothing is written until
+       Save. The buttons keep their `formaction` for a page with no script. */
+    e.preventDefault();
+
+    var card = arrow.closest('.favwrap');
+    var all = cards();
+    var at = all.indexOf(card);
+    var to = at + (arrow.classList.contains('favleft') ? -1 : 1);
+    if (to < 0 || to >= all.length) { return; }
+
+    if (to > at) {
+      grid.insertBefore(all[to], card);
+    } else {
+      grid.insertBefore(card, all[to]);
+    }
+
+    ends();
+    card.classList.add('moving');
+    arrow.focus();
+  });
+
+  edit.addEventListener('click', function () { mode(true); ends(); });
+  cancel.addEventListener('click', function () {
+    /* Put every card back where it was, in one pass, before leaving the
+       mode -- otherwise Cancel would look like Save with extra steps. */
+    original.forEach(function (card) { grid.appendChild(card); });
+    var plus = document.getElementById('addfavour');
+    if (plus) { grid.appendChild(plus); }
+    mode(false);
+  });
+})();
+</script>

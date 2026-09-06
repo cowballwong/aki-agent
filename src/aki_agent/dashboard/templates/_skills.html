@@ -1,0 +1,90 @@
+{# THE LIST IS A LIST, and everything else is behind a press.
+
+
+
+   It was a four-column table with a whole edit form folded into every second
+   row, and a sixteen-row textarea at the bottom for writing a new one. With
+   half a dozen skills nobody could reach the end of it.
+
+   `<details>` for the detail rather than script, and the form is a dialog the
+   ADDRESS opens rather than a button -- both so the page still works with
+   JavaScript off, the same way the Schedule form does. #}
+
+<p class="freshness">
+  A skill is a short note telling the assistant how you like a particular job
+  done, so it comes out the same way every time. They live in your own folder,
+  so updating the software never touches them.
+</p>
+
+<p class="rowtools">
+  <a class="btn primary" href="/yours?tab=skills&amp;add=1">+ Write a skill</a>
+</p>
+
+{% if skills %}
+<div class="stack">
+  {% for skill in skills %}
+    <div class="rowitem">
+      <div class="rowhead">
+        <b>{{ skill.name }}</b>
+        {% if not skill.ours %}<span class="pill">from the library</span>{% endif %}
+        {% set trouble = skill.problems() %}
+        {% if trouble %}<span class="pill bad">{{ trouble|length }} to fix</span>{% endif %}
+        <span class="rowacts">
+          <a class="btn" href="/yours?tab=skills&amp;edit={{ skill.key|urlencode }}">Edit</a>
+          <form method="post" action="/skills/delete" class="inline"
+                onsubmit="return confirm('Delete {{ skill.name | js }}?\n\nThis removes the skill from your folder.')">
+            <input type="hidden" name="token" value="{{ token }}">
+            <input type="hidden" name="key" value="{{ skill.key }}">
+            <button type="submit">Delete</button>
+          </form>
+        </span>
+      </div>
+      <details class="rowmore">
+        <summary>Open</summary>
+        <p class="freshness"><b>When it is used.</b>
+          {{ skill.description or 'It does not say, so it will never trigger.' }}</p>
+        {% for problem in trouble %}
+          <div class="blank warn">{{ problem }}</div>
+        {% endfor %}
+        <p class="freshness">Changed {{ skill.modified[:16].replace('T', ' ') }}
+          &middot; <code>{{ skill.key }}</code></p>
+        <pre class="rowbody">{{ skill.body }}</pre>
+      </details>
+    </div>
+  {% endfor %}
+</div>
+{% else %}
+  <p class="empty">You have not written any skills yet.</p>
+{% endif %}
+
+<dialog id="skillform" class="sheet" {{ 'open' if showing_form }}>
+  <div class="sheethead">
+    <b>{% if editing %}Edit &ldquo;{{ editing.name }}&rdquo;
+       {% else %}Write a skill{% endif %}</b>
+    <a class="btn" href="/yours?tab=skills">Close</a>
+  </div>
+
+  <form method="post" action="/skills/save">
+    <input type="hidden" name="token" value="{{ token }}">
+    <input type="hidden" name="key" value="{{ editing.key if editing else '' }}">
+
+    <label>Name<input name="name" placeholder="Weekly update"
+      value="{{ editing.name if editing else '' }}"></label>
+
+    <label>When to use it
+      <input name="description"
+             value="{{ editing.description if editing else '' }}"
+             placeholder="Use when I ask for my weekly update, say &quot;write my Monday report&quot;, or mention the team summary.">
+    </label>
+    <p class="freshness">
+      Say <b>when</b> to use it, not just what it does. A description that
+      names the trigger is the difference between a skill that gets used and
+      one that never fires.
+    </p>
+
+    <label>Instructions<textarea name="body" rows="14">{{ editing.body if editing else starter.body }}</textarea></label>
+
+    <button type="submit" class="primary">
+      {% if editing %}Save changes{% else %}Create skill{% endif %}</button>
+  </form>
+</dialog>

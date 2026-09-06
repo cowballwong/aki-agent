@@ -1,0 +1,17 @@
+{% extends "base.html" %}
+{% block titlemode %}page{% endblock %}
+{% block title %}Stopped{% endblock %}
+{% block heading %}Stopped{% endblock %}
+{% block body %}
+
+<p class="freshness">The dashboard has stopped. You can close this tab.</p>
+
+<div class="note">
+  <b>{{ assistant_name }} itself is still running.</b> This only stopped the
+  web page — the assistant, its memory and its scheduled work are untouched.
+</div>
+
+<p class="empty">To open it again, use your launcher, or run
+  <code>python -m aki_agent.dashboard</code>.</p>
+
+{% endblock %}

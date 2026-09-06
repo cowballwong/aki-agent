@@ -1,0 +1,18 @@
+<p class="freshness">
+  Built entirely on this computer from your own verdicts. Nothing here has been
+  sent anywhere.
+</p>
+
+<div class="strip">
+  {% for verdict, count in counts.items() %}
+    <span class="chip"><b>{{ count }}</b> {{ verdict }}</span>
+  {% endfor %}
+</div>
+
+{% if cards %}
+  {% for name, text in cards %}
+    <div class="card"><pre>{{ text }}</pre></div>
+  {% endfor %}
+{% else %}
+  <p class="empty">Nothing learned yet. It builds up as you accept, edit and reject what I produce.</p>
+{% endif %}

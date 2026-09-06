@@ -1,0 +1,88 @@
+<p class="freshness">
+  Standing instructions for your assistant. It reads them at the start of every
+  session and follows them, and they outrank its own judgement about what would
+  be more helpful.
+</p>
+
+<div class="note">
+  <b>These are followed, not enforced.</b> That is the difference between this
+  page and <a href="/safety">Safety</a>: safety refuses a short list of
+  unrecoverable commands in code, whatever anybody says, and cannot be changed.
+  A house rule is an instruction to a careful assistant.
+  <br><br>
+  Where a rule happens to be true in code as well, it says so below &mdash;
+  because &ldquo;it has been told&rdquo; and &ldquo;it cannot&rdquo; are
+  different promises, and deciding how much to leave it doing unattended means
+  knowing which one you have.
+</div>
+
+{% if rules %}
+<table>
+  <tbody>
+  {% for rule, backing in rules %}
+    <tr>
+      <td>{{ rule }}
+        {% if backing %}
+          {# "partly in code", not "also enforced". The match is a keyword
+             test, so the badge can land on a rule broader than the thing the
+             code does -- and the detail beside it now says exactly what that
+             thing is. A badge that overstates its own scope is worse than no
+             badge: somebody leaving this running unattended is making a
+             judgement about what the software will refuse. #}
+          <div class="sub"><span class="badge on">partly in code</span>
+            {{ backing.detail }} &mdash; <code>{{ backing.where }}</code></div>
+        {% endif %}
+      </td>
+      <td>
+        <form method="post" action="/rules/remove" class="inline"
+              onsubmit="return confirm('Remove this rule?');">
+          <input type="hidden" name="token" value="{{ token }}">
+          <input type="hidden" name="rule" value="{{ rule }}">
+          <button type="submit" class="danger">Remove</button>
+        </form>
+      </td>
+    </tr>
+  {% endfor %}
+  </tbody>
+</table>
+{% else %}
+  <p class="empty">No rules yet. Your assistant uses its ordinary judgement.</p>
+{% endif %}
+
+<h2>Add one</h2>
+<div class="card">
+  <form method="post" action="/rules/add">
+    <input type="hidden" name="token" value="{{ token }}">
+    <label>In your own words
+      <input name="rule" placeholder="No email goes out until I have seen it."
+             autocomplete="off"></label>
+    <button type="submit" class="primary">Add</button>
+    <p class="freshness">
+      Write it as you would say it to a person. Short enough to hold in your
+      head &mdash; a rule nobody can remember is a rule nobody checks against.
+    </p>
+  </form>
+</div>
+
+{% if suggestions %}
+<h2>Ones people usually want</h2>
+<div class="card">
+  <p class="freshness">
+    Suggestions, not defaults. Nothing here is in force until you add it &mdash;
+    a rule you did not choose is one you will not remember agreeing to, and the
+    first time it gets in your way you will distrust the whole list.
+  </p>
+  {% for one in suggestions %}
+    <form method="post" action="/rules/add" class="inline">
+      <input type="hidden" name="token" value="{{ token }}">
+      <input type="hidden" name="rule" value="{{ one }}">
+      <button type="submit">+ {{ one }}</button>
+    </form>
+  {% endfor %}
+</div>
+{% endif %}
+
+<p class="freshness">
+  Kept in <code>{{ rules_file }}</code>. You can edit that file directly, or
+  just tell your assistant what you want changed.
+</p>

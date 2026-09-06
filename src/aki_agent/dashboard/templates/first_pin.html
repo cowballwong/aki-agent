@@ -1,0 +1,34 @@
+{% extends "base.html" %}
+{% block titlemode %}page{% endblock %}
+{% block heading %}Choose your PIN{% endblock %}
+{% block body %}
+<div class="card" style="max-width:26rem">
+
+  <p class="doorname">{{ assistant_name }} — Choose your PIN</p>
+
+  <p>Your assistant came with the PIN <code>000000</code>, which is printed in
+     the instructions and is therefore not a PIN. Choose one now — it takes a
+     moment and it is the last time you will be asked.</p>
+
+  {% if problem %}
+    <p class="warn">{{ problem }}</p>
+  {% endif %}
+
+  <form method="post" action="{{ url_for('first_pin') }}">
+    <input type="hidden" name="token" value="{{ token }}">
+    <label>New PIN — {{ length }} numbers
+      <input name="pin" type="password" inputmode="numeric"
+             autocomplete="new-password" autofocus
+             pattern="[0-9]*" maxlength="{{ length }}">
+    </label>
+    <button type="submit" class="primary">Set it</button>
+  </form>
+
+  <p class="freshness">
+    Nothing here can read your PIN back — only check one you type. If you
+    forget it, the login page will set a new one and write it to your Desktop;
+    it cannot tell you the old one.
+  </p>
+
+</div>
+{% endblock %}

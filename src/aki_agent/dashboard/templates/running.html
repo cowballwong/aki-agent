@@ -1,0 +1,29 @@
+{% extends "base.html" %}
+{% from "_subtabs.html" import subtabs %}
+{% block heading %}Running{% endblock %}
+{% block body %}
+
+{# Five blocks on one page, and the live stream is up to 120 rows -- so the
+   controls somebody came for were below it. Split by the question being asked, not by where the data
+   comes from. #}
+{{ subtabs("/running", tab, [
+     ("now", "Working now"),
+     ("session", "The session"),
+     ("state", "Where I am")]) }}
+
+{% if tab == "now" %}
+  <p class="freshness">What the assistant is doing at this moment.</p>
+  {% include "_watching.html" %}
+
+{% elif tab == "session" %}
+  <p class="freshness">The session it is doing it in &mdash; how long it has
+     been up, whether it is safe to restart, and the controls for doing so.</p>
+  {% include "_sessions.html" %}
+
+{% else %}
+  <p class="freshness">The thread it would pick up again after a restart.
+     Written every twenty minutes, so a crash never loses more than that.</p>
+  {% include "_working_state.html" %}
+{% endif %}
+
+{% endblock %}

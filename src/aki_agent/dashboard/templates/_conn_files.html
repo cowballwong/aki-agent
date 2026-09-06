@@ -1,0 +1,63 @@
+{# Cloud folders found on this computer. No account and no key: they are
+   read as ordinary folders, which is why this is the shortest tab. #}
+<h2><span class="ico">&#9635;</span>Files</h2> {{ howto('cloud-files') }}
+<div class="card">
+  {% if stores %}
+    <p class="sub">Found on this computer, read as ordinary folders &mdash; no account, no key:</p>
+    {% for store in stores %}
+      <div><b>{{ store.name }}</b> <span class="blank">{{ store.path }}</span>
+        {% if store.available %}<span class="badge on">there</span>
+        {% else %}<span class="badge bad">not available</span>{% endif %}
+      </div>
+    {% endfor %}
+  {% else %}
+    <p class="empty">No cloud folders found. Ordinary folders work fine.</p>
+  {% endif %}
+</div>
+
+{# Asked for on 2026-08-29: Email and Google Drive both, not Calendar alone.
+
+   Deliberately BELOW the folders and not instead of them. The folder above
+   needs no account, works offline, and is what almost everybody should use;
+   this is the second half, for the files that were never synced down and for
+   searching a whole Drive. Signing in here changes nothing about the folder.
+
+   Read only, and the scope says so. Writing to somebody's Drive is a
+   different decision with a different confirmation story, and holding the
+   permission "for later" is how a read-only tool turns out not to be one. #}
+<h2><span class="ico">&#9729;</span>Google Drive, for what is not synced</h2> {{ howto('google-drive') }}
+<div class="card">
+  <p class="freshness" style="margin-top:0">{{ drive.describes }}</p>
+  {% if drive.problem %}
+    <p><span class="badge bad">{{ drive.problem }}</span></p>
+  {% elif drive.connected %}
+    <p><span class="badge on">signed in, read only</span></p>
+    <p class="freshness">
+      Your assistant can search and open Drive files with
+      <span class="blank">drive-find</span> and
+      <span class="blank">drive-read</span>. It cannot change or delete
+      anything there. Signing out here affects this computer only &mdash; to
+      withdraw the permission at Google as well, remove it at
+      <span class="blank">{{ drive.revoke }}</span>.
+    </p>
+    <form method="post" action="/connections/google/disconnect" class="inline"
+          onsubmit="return confirm('Sign this computer out of Google Drive?');">
+      <input type="hidden" name="token" value="{{ token }}">
+      <input type="hidden" name="service" value="drive">
+      <button type="submit">Sign out</button>
+    </form>
+  {% elif drive.has_client %}
+    <form method="post" action="/connections/google/connect">
+      <input type="hidden" name="token" value="{{ token }}">
+      <input type="hidden" name="service" value="drive">
+      <button type="submit">Sign in with Google</button>
+      <span class="sub">Uses the Google app you registered for Calendar, and
+        asks only for permission to read.</span>
+    </form>
+  {% else %}
+    <p class="freshness">
+      Needs a Google app first &mdash; the same one the Calendar tab asks for.
+      Set it up there once and this button appears.
+    </p>
+  {% endif %}
+</div>

@@ -1,0 +1,33 @@
+{# One strip, three pages. Call it as:
+     {% from "_subtabs.html" import subtabs %}
+     {{ subtabs("/running", tab, [("now", "Now"), ("session", "Session")]) }}
+   `current` is whatever the view read out of ?tab=, so the address is the
+   state and a reload lands where you were. #}
+{% macro subtabs(base, current, items) %}
+<nav class="subtabs">
+  {% for key, label in items %}
+    <a class="subtab{{ ' on' if current == key }}"
+       href="{{ base }}?tab={{ key }}">{{ label }}</a>
+  {% endfor %}
+</nav>
+{% endmacro %}
+
+{# THE SAME STRIP, WHEN ONE OF THE TABS IS ITS OWN PAGE.
+
+   The Library
+   already had a route, its own filters and its own address that other pages
+   link to, so making it a tab meant either moving all of that inside
+   `/yours` or letting one tab point somewhere else. Moving it would have
+   broken every existing link to `/library` to gain nothing a reader would
+   notice.
+
+   So the strip takes an href per tab. Call it as:
+     {{ linked_subtabs(tab, [("skills", "Skills", "/yours?tab=skills"),
+                             ("library", "Library", "/library")]) }} #}
+{% macro linked_subtabs(current, items) %}
+<nav class="subtabs">
+  {% for key, label, href in items %}
+    <a class="subtab{{ ' on' if current == key }}" href="{{ href }}">{{ label }}</a>
+  {% endfor %}
+</nav>
+{% endmacro %}
