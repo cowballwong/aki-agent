@@ -64,16 +64,21 @@ thinks with. Pick one now; you can change later.
 > same way every time, including in scheduled tasks. But it is the less
 > travelled road here, and it is honest to say so before you walk it.
 
-### Step 1 — Install Python
+### Step 1 — Python (you can skip this)
 
 Aki Agent uses Python for its own housekeeping. You will never have to write
-any.
+any, and **you do not have to install it yourself** — setup checks for it
+first and offers to install it, into your own user account, with no
+administrator password.
+
+Do it by hand only if you would rather, or if setup cannot reach a package
+manager:
 
 1. Go to <https://www.python.org/downloads/> and press the big download
    button.
 2. Run the installer.
 3. **On Windows, tick "Add Python to PATH" on the first screen.** It is easy to
-   miss and everything afterwards depends on it.
+   miss.
 
 You need version **3.10 or newer**, which is anything you download today.
 

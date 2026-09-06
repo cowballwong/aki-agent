@@ -217,13 +217,46 @@ conversation, not a gate to get stuck behind.
 Do this before the interview proper. There is no point spending twenty minutes
 on someone's preferences and then telling them Python is missing.
 
+**Python comes first, and it is the one tool the health check cannot report
+on.** Every command in this package starts with `python`, including the health
+check itself and both plugin hooks — so on a machine with no Python the
+checker cannot run far enough to say that Python is what is wrong. The
+symptom is a command that fails instantly, which reads like a broken install
+rather than a missing tool. So establish it yourself, without the engine:
+
+```bash
+python --version
+```
+
+On Windows, if that prints nothing or opens the Microsoft Store, try
+`py --version` instead — the python.org installer registers the `py` launcher even when
+"Add Python to PATH" was not ticked, which is the box people miss.
+
+If neither works, or it reports older than 3.10, offer to install it. Show
+the command, wait for a yes, then run it:
+
+```bash
+# Windows -- user scope, so no administrator password is ever needed
+winget install --id Python.Python.3.13 --scope user --silent --accept-package-agreements --accept-source-agreements
+
+# macOS
+brew install python@3.13
+```
+
+If neither package manager is there, send them to
+<https://www.python.org/downloads/> and, on Windows, tell them to tick **"Add
+Python to PATH"** on the first screen. Either way they will need a new
+terminal window afterwards before it is found. That is normal, not a failure.
+
+Only once `python` answers, run the health check for everything else:
+
 ```bash
 python ~/.aki-agent/aki.py aki_agent.doctor
 ```
 
-For anything missing, the health check above already prints the exact install
-command for this machine, under the tool it could not find. Read it off that
-report rather than composing one.
+For anything else missing, the health check above already prints the exact
+install command for this machine, under the tool it could not find. Read it
+off that report rather than composing one.
 
 **Show the user the exact command before running anything**, and wait for a
 yes. `dependencies.install()` will refuse unless you pass `confirmed=True`,
