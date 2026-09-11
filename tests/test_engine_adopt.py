@@ -7,6 +7,8 @@ subprocess; these tests are about that subprocess actually getting there.
 
 from __future__ import annotations
 
+from pathlib import Path
+
 from aki_agent import engine
 
 
@@ -71,3 +73,74 @@ def test_the_manifest_is_a_file_that_exists_in_this_checkout():
     root = Path(engine.__file__).resolve().parents[2]
     missing = [one for one in engine.COPIED if not (root / one).exists()]
     assert not missing, missing
+
+
+# ---------------------------------------------------------------------------
+# The executable bit on the scripts a user double-clicks
+# ---------------------------------------------------------------------------
+
+def test_a_command_file_that_lost_its_executable_bit_gets_it_back(
+        tmp_path, monkeypatch):
+    """A real macOS install, seen with `ls -l`.
+
+    `bin/dashboard.command` was `-rw-r--r--`. The launcher starts that file in
+    the background, so the permission denial went to a job nobody reads:
+    Claude Code opened normally and the dashboard simply never appeared, with
+    nothing anywhere saying why. `copy2` had faithfully carried a 0o644 off
+    the source.
+
+    ASSERTED ON THE CALL, NOT ON THE RESULTING MODE
+    -----------------------------------------------
+    Windows ignores the executable bit, so a `stat()` here reads back 0o666
+    whatever was asked for, and the first version of this test failed on the
+    machine it was written on while testing nothing. What is being checked is
+    that the code asks -- which is the whole of its job; granting is the
+    filesystem's.
+    """
+    monkeypatch.setattr(engine.os, "name", "posix")
+    root = tmp_path / "engine" / "bin"
+    root.mkdir(parents=True)
+    script = root / "dashboard.command"
+    script.write_text("#!/bin/bash" + chr(10), encoding="utf-8")
+    script.chmod(0o644)
+
+    asked = []
+    real = Path.chmod
+    monkeypatch.setattr(
+        Path, "chmod",
+        lambda self, mode, **kw: (asked.append((self.name, mode)),
+                                  real(self, mode, **kw))[1])
+
+    assert engine.make_runnable(tmp_path / "engine") == 1
+    assert len(asked) == 1
+    name, mode = asked[0]
+    assert name == "dashboard.command"
+    assert mode & 0o111 == 0o111
+
+
+def test_files_that_are_not_scripts_are_left_alone(tmp_path, monkeypatch):
+    """Only `.sh` and `.command`. Marking a whole tree executable to fix two
+    files would be a wider change than the problem, and on a synced drive it
+    is the kind of change that shows up as noise in every later diff."""
+    monkeypatch.setattr(engine.os, "name", "posix")
+    root = tmp_path / "engine"
+    root.mkdir()
+    (root / "config.json").write_text("{}", encoding="utf-8")
+
+    asked = []
+    monkeypatch.setattr(Path, "chmod",
+                        lambda self, mode, **kw: asked.append(self.name))
+
+    assert engine.make_runnable(root) == 0
+    assert asked == []
+
+
+def test_windows_is_not_touched(tmp_path, monkeypatch):
+    """There is no executable bit to restore, and `chmod` on Windows sets the
+    ReadOnly attribute instead -- which `clear_readonly` exists to remove."""
+    monkeypatch.setattr(engine.os, "name", "nt")
+    root = tmp_path / "engine"
+    root.mkdir()
+    (root / "check.command").write_text("x", encoding="utf-8")
+
+    assert engine.make_runnable(root) == 0

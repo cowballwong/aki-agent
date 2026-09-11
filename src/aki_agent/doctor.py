@@ -29,6 +29,7 @@ Run it as:  python -m aki_agent.doctor
 from __future__ import annotations
 
 import importlib
+import os
 import sys
 from dataclasses import dataclass
 from pathlib import Path
@@ -709,6 +710,74 @@ def check_which_brain() -> Check:
     return Check("Which model it uses", True, detail=detail)
 
 
+def check_launcher() -> Check:
+    """Is there a file to double-click, and can the machine actually run it?
+
+    THE TWO FAILURES THIS EXISTS FOR
+    ---------------------------------
+    A real macOS install finished setup, started the assistant, and got a
+    Claude Code session with no dashboard. Two separate causes, and `doctor`
+    passed both.
+
+    First, `~/.aki-agent/start-assistant.command` had never been written. The
+    last step of setup had not run, nothing said so, and every other check
+    here is about the *contents* of a launcher -- `check_engine` reads one
+    only `if launcher_file.exists()`, and `_repoint` rewrites one on the same
+    condition. A missing launcher was therefore not a fault anything could
+    report; it was a file nothing had an opinion about.
+
+    Second, `bin/dashboard.command` had arrived at 0o644. The launcher starts
+    it in the background, so the permission denial went to a job nobody reads.
+    A dashboard that never appears, and no error anywhere.
+
+    Both are invisible on purpose here: they are exactly the kind of fault a
+    person cannot report, because from where they sit nothing happened.
+    """
+    from . import engine, launcher, paths
+
+    launcher_file = launcher.launcher_path()
+    if not launcher_file.exists():
+        return Check(
+            "The file you double-click", False,
+            detail=(f"there is no {launcher_file.name} in "
+                    f"{paths.app_dir()} -- setup either did not finish or "
+                    "was interrupted before its last step"),
+            fix=_run("aki_agent.cli",
+                     "make-launcher --dashboard --yes"))
+
+    text = launcher_file.read_text(encoding="utf-8", errors="replace")
+    opens_dashboard = "dashboard." in text
+
+    if paths.is_windows():
+        detail = str(launcher_file)
+        if not opens_dashboard:
+            detail += " (it does not open the dashboard)"
+        return Check("The file you double-click", True, detail=detail)
+
+    # macOS: a script without its executable bit is a script that cannot run,
+    # and Finder says so in a dialog that names no cause.
+    unrunnable: list[str] = []
+    if not os.access(launcher_file, os.X_OK):
+        unrunnable.append(launcher_file.name)
+    if opens_dashboard:
+        dashboard = engine.running_from() / "bin" / "dashboard.command"
+        if dashboard.exists() and not os.access(dashboard, os.X_OK):
+            unrunnable.append("bin/dashboard.command")
+
+    if unrunnable:
+        return Check(
+            "The file you double-click", False,
+            detail=("these have lost permission to run, so double-clicking "
+                    "does nothing or fails silently: "
+                    + ", ".join(unrunnable)),
+            fix=_run("aki_agent.cli", "repair --yes"))
+
+    detail = str(launcher_file)
+    if not opens_dashboard:
+        detail += " (it does not open the dashboard)"
+    return Check("The file you double-click", True, detail=detail)
+
+
 def check_no_stray_engines() -> Check:
     """Numbered engine folders beside the real one.
 
@@ -949,6 +1018,7 @@ def run_all() -> list[Check]:
     checks.append(check_workspace_names(loaded))
     checks.append(check_session_is_current())
     checks.append(check_credential_store_reachable())
+    checks.append(check_launcher())
     checks.append(check_no_stray_engines())
     checks.append(check_scheduled_tasks_are_working())
     checks.append(check_nothing_was_set_aside())

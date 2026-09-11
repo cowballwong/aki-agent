@@ -68,7 +68,8 @@ def _program_name() -> str:
     try:
         from . import engine
 
-        return f'python "{engine.bootstrap()}" aki_agent.cli'
+        return (f'{engine.python_word()} "{engine.bootstrap()}" '
+                "aki_agent.cli")
     except Exception:                                     # pragma: no cover
         return "aki_agent.cli"
 
@@ -1954,10 +1955,24 @@ def _repoint(root: "Path | None" = None) -> int:
     Adopting the engine passes the copy it has just made instead, because at
     that moment the process is still importing the old one.
     """
+    from . import engine as engine_module
     from . import launcher, schedule, telegram_setup
 
     root = Path(root) if root else Path(__file__).resolve().parents[2]
     runner = schedule.runner_script(root)
+
+    # Before anything else: the scripts have to be runnable.
+    #
+    # `repair` is what somebody runs when something is already wrong, and one
+    # of the things that is wrong often enough to be worth a line here is a
+    # `bin/*.command` that arrived without its executable bit. The launcher
+    # backgrounds `dashboard.command`, so the denial goes to a job nobody
+    # reads and the only symptom is a dashboard that never appears. Repairing
+    # the launcher while leaving the file unrunnable would rewrite the one
+    # part that was already correct.
+    restored = engine_module.make_runnable(root)
+    if restored:
+        print(f"  ok -- made {restored} script(s) runnable again")
 
     # If the scheduler cannot be asked, stop. Do not carry on as though the
     # answer were "no tasks" (2026-08-23).

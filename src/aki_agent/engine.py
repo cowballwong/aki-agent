@@ -143,9 +143,27 @@ def bootstrap() -> Path:
     return running_from() / "bin" / "_bootstrap.py"
 
 
+def python_word() -> str:
+    """What to write for "Python" in a command somebody will actually run.
+
+    Windows has `python`. macOS does not -- Apple removed Python 2 and never
+    shipped a bare `python`, so every generated command here that began with
+    the word `python` failed on a Mac with `command not found`, including the
+    preflight line inside the launcher and every `fix:` line `doctor` prints.
+    That is a whole platform's worth of instructions that could not be
+    followed, in a package whose standing rule is that a Windows-only fix is
+    not a finished fix.
+
+    `python3` on a stock Mac is Apple's 3.9.6, which this package cannot run
+    on -- `bin/_bootstrap.py` hands over to a newer interpreter when it finds
+    itself under one, which is what makes naming `python3` here safe.
+    """
+    return "python" if os.name == "nt" else "python3"
+
+
 def how_to_run(*arguments: str) -> str:
     """A command line a future process can actually execute."""
-    return f'python "{bootstrap()}" ' + " ".join(arguments)
+    return f'{python_word()} "{bootstrap()}" ' + " ".join(arguments)
 
 
 def is_adopted() -> bool:
@@ -350,6 +368,47 @@ def clear_readonly(root: Path) -> int:
         except OSError:
             continue
     return cleared
+
+
+RUNNABLE_SUFFIXES = {".sh", ".command"}
+
+
+def make_runnable(root: Path) -> int:
+    """Put the executable bit back on the scripts a user double-clicks.
+
+    Belt and braces beside `bin/make_release.py`, for the same reason
+    `clear_readonly` is: the release zip sets 0o755, but the bit does not
+    survive every road onto a Mac. A folder synced through a cloud drive, a
+    copy off an exFAT stick, an unzip by a tool that ignores the mode -- each
+    lands the file at 0o644, and `copy2` faithfully carries that into the
+    adopted engine.
+
+    THE FAILURE THIS FIXES IS SILENT, WHICH IS WHY IT IS WORTH CODE
+    ---------------------------------------------------------------
+    The generated launcher starts the dashboard with
+    `"<engine>/bin/dashboard.command" &` -- backgrounded. Without the bit the
+    shell writes "permission denied" into a background job nobody reads, the
+    launcher carries on, Claude Code opens, and the owner sees an assistant
+    that started perfectly and simply has no dashboard. A real install on
+    macOS showed `-rw-r--r--` on a file the code assumed it could run.
+
+    Trusting the source's mode was the bug. This does not trust it.
+    """
+    fixed = 0
+    if os.name == "nt" or not root.exists():
+        return 0
+    for path in root.rglob("*"):
+        if path.suffix not in RUNNABLE_SUFFIXES or not path.is_file():
+            continue
+        try:
+            mode = path.stat().st_mode
+            wanted = mode | stat.S_IXUSR | stat.S_IXGRP | stat.S_IXOTH
+            if mode != wanted:
+                path.chmod(wanted)
+                fixed += 1
+        except OSError:
+            continue
+    return fixed
 
 
 def _on_remove_error(func, path, _exc):
@@ -699,6 +758,7 @@ def copy_engine(the_plan: Adoption) -> tuple[bool, str]:
 
     # ---- 2. check it before trusting it -----------------------------------
     clear_readonly(staging)
+    make_runnable(staging)
     problems = _verify(staging, the_plan.items)
     if problems:
         force_rmtree(staging)

@@ -156,10 +156,46 @@ the fix removed.
 
 ---
 
+## 0.47.1 — 2026-09-11 — the first real macOS install
+
+The changelog said macOS had been written, reviewed and never run. It was run.
+Four things stopped it, none of them loudly, and all four were on the path any
+Mac user takes on their first day.
+
+- **Apple ships 3.9.6 as `python3`, and this package needs 3.10.** The
+  bootstrap refused it and said to install a current Python — to people who
+  may already have one, somewhere it had not looked. It now searches, naming
+  Homebrew's folder and the python.org framework outright rather than hoping
+  they are on PATH, because a `.command` opened from Finder starts with a
+  minimal one and a non-interactive bash never reads the profile the installer
+  wrote to. Guarded against forking for ever, and the file still parses under
+  3.9 so its last-resort message can still be printed.
+- **macOS has no bare `python`.** Every generated line that began with that
+  word — the launcher's own preflight, every `fix:` line the health check
+  prints, the inbox commands written into a new workspace — was a line a Mac
+  user could not run. One function now answers the question for both
+  platforms.
+- **`bin/dashboard.command` arrived without its executable bit.** The launcher
+  starts it in the background, so the denial went to a job nobody reads: the
+  assistant opened perfectly and simply had no dashboard. Adoption and repair
+  now restore the bit instead of trusting the mode they were handed.
+- **A launcher that was never written was nobody's problem.** Every existing
+  check read a launcher only `if launcher_file.exists()`, so a setup that
+  stopped before its last step passed them all. The health check now looks for
+  the file itself, and on macOS checks that it can be run.
+
+The shape is the one this changelog keeps returning to: not a mechanism that
+was wrong, but a failure with nothing watching it. Four of the seventeen new
+tests exist only to hold the rule that a Windows-only fix is not a finished
+fix.
+
+---
+
 ## What is still not true
 
-- **macOS has never been executed by the author.** Written, reviewed, never
-  run.
+- **macOS is now run, but rarely.** The first real install was 2026-09-11
+  and it found four separate faults; see 0.47.1. Treat macOS coverage as thin
+  rather than absent, and assume the next one is still there.
 - One test fails intermittently and the cause is not known. It is marked as
   such in the file rather than quietly retried.
 - The safety gate is a short denylist and fails open, on purpose.

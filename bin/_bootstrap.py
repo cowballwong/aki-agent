@@ -101,6 +101,105 @@ def say(message: str = "") -> None:
               flush=True, file=sys.stderr)
 
 
+# Set on the child when this file re-runs itself under a newer interpreter,
+# so the child never tries to do it again. Without it, a machine where every
+# candidate reports a version this file disagrees with would fork for ever.
+RELAUNCH_FLAG = "AKI_BOOTSTRAP_RELAUNCHED"
+
+
+def python_candidates():
+    """Interpreters to try, best first, when the current one is too old.
+
+    WHY EXPLICIT PATHS AND NOT JUST NAMES
+    --------------------------------------
+    macOS ships Apple's own `python3`, and it is 3.9.6. It is first on PATH,
+    it is what every `.command` here resolved, and this file refused it --
+    correctly, and uselessly, because the message said "install a current
+    Python" to somebody who may already have one. That is the whole macOS
+    install failing at step one on a stock machine.
+
+    Names alone do not fix it. A `.command` double-clicked from Finder starts
+    with a minimal PATH: Homebrew's `/opt/homebrew/bin` is often not on it,
+    and the python.org installer's PATH line lands in a shell profile that a
+    non-interactive bash never reads. So the two places an installed Python
+    actually lives are named outright rather than hoped for.
+
+    Windows gets `py -3` for the same class of reason: the python.org
+    installer always installs the launcher, including when the user missed
+    the "Add Python to PATH" tick box, which is the box people miss.
+    """
+    wanted = []
+    if sys.platform.startswith("win"):
+        wanted.append(["py", "-3"])
+    # Newest first. A machine with several installed should use the best one.
+    versions = ["3.14", "3.13", "3.12", "3.11", "3.10"]
+    for version in versions:
+        wanted.append(["python" + version])
+    if not sys.platform.startswith("win"):
+        for folder in ("/opt/homebrew/bin", "/usr/local/bin",
+                       "/opt/local/bin"):
+            for version in versions:
+                wanted.append([folder + "/python" + version])
+        for version in versions:
+            wanted.append(["/Library/Frameworks/Python.framework/Versions/"
+                           + version + "/bin/python3"])
+    return wanted
+
+
+def is_new_enough(command) -> bool:
+    """Run it and ask. Never trust a name or a path to say what version it is.
+
+    The Windows Store stub on PATH is the standing reminder: it answers to
+    `python`, it is zero bytes, and running it opens a shop.
+    """
+    test = ("import sys; raise SystemExit(0 if sys.version_info >= "
+            + str(tuple(MINIMUM_PYTHON)) + " else 1)")
+    try:
+        done = subprocess.run(command + ["-c", test],
+                              stdout=subprocess.DEVNULL,
+                              stderr=subprocess.DEVNULL,
+                              timeout=20, check=False)
+    except (OSError, subprocess.SubprocessError):
+        return False
+    return done.returncode == 0
+
+
+def relaunch_under_newer_python(argv: list) -> "int | None":
+    """Hand this same command to a newer Python. The exit code, or None.
+
+    None means "carry on here": either this interpreter is already fine, or
+    nothing better could be found and the caller should print the advice.
+
+    A subprocess rather than `os.execv` on purpose -- `execv` on Windows
+    replaces the process in a way that detaches it from the console it was
+    started in, and a launcher whose window returns instantly while work
+    carries on invisibly is worse than the problem being fixed.
+    """
+    if sys.version_info >= MINIMUM_PYTHON:
+        return None
+    if os.environ.get(RELAUNCH_FLAG):
+        return None
+
+    here = str(Path(__file__).resolve())
+    child = dict(os.environ)
+    child[RELAUNCH_FLAG] = "1"
+
+    for command in python_candidates():
+        if not is_new_enough(command):
+            continue
+        say()
+        say("  The Python that started this is "
+            + ".".join(str(part) for part in sys.version_info[:3])
+            + ", which is too old. Using " + " ".join(command) + " instead.")
+        try:
+            done = subprocess.run(command + [here] + list(argv[1:]),
+                                  env=child, check=False)
+        except (OSError, subprocess.SubprocessError):
+            continue
+        return done.returncode
+    return None
+
+
 def check_python_version() -> bool:
     if sys.version_info >= MINIMUM_PYTHON:
         return True
@@ -311,6 +410,12 @@ def main(argv: list[str]) -> int:
     arguments = argv[2:]
 
     remember_where_i_am()
+
+    # Before refusing an old Python, look for a newer one. The refusal is the
+    # last resort, not the first answer.
+    handed_over = relaunch_under_newer_python(argv)
+    if handed_over is not None:
+        return handed_over
 
     if not check_python_version():
         # A hook must not fail the command it is inspecting because of the

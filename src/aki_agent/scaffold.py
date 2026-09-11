@@ -564,7 +564,11 @@ def _rules_section() -> str:
 def _mirror_section_only() -> str:
     from . import engine
 
-    return _MIRROR_ONLY.replace("{bootstrap}", str(engine.bootstrap()))
+    # `{python}` as well as `{bootstrap}`: macOS has no bare `python`,
+    # and these lines are copied out and run by hand.
+    return (_MIRROR_ONLY
+            .replace("{bootstrap}", str(engine.bootstrap()))
+            .replace("{python}", engine.python_word()))
 
 
 def mirror_section() -> str:
@@ -701,21 +705,21 @@ This is your job, not the software's.
 dashboard while you were away:
 
 ```bash
-python "{bootstrap}" aki_agent.inbox pending
+{python} "{bootstrap}" aki_agent.inbox pending
 ```
 
 **When they message you from anywhere else** \u2014 a phone, a messaging app
 \u2014 write it down, so it shows in the dashboard too:
 
 ```bash
-python "{bootstrap}" aki_agent.inbox said "what they said" --channel telegram
+{python} "{bootstrap}" aki_agent.inbox said "what they said" --channel telegram
 ```
 
 Anything you send through the notification system records itself. Only a
 reply typed straight back in a session needs:
 
 ```bash
-python "{bootstrap}" aki_agent.inbox replied "what you said" --channel telegram
+{python} "{bootstrap}" aki_agent.inbox replied "what you said" --channel telegram
 ```
 
 Do it without being asked. A conversation with a hole in it is worse than no

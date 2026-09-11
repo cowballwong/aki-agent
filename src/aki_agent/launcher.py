@@ -184,7 +184,7 @@ def _preflight_block(package_root: Path, windows: bool) -> str:
     return (
         "\n# Say something if the messaging channel is not connected --\n"
         "# silence here is indistinguishable from working.\n"
-        f'python "{package_root}/bin/_bootstrap.py" '
+        f'python3 "{package_root}/bin/_bootstrap.py" '
         "aki_agent.cli channel-check\n"
     )
 
