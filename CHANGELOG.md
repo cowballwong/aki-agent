@@ -509,6 +509,43 @@ in the product, and it is written down here rather than quietly left out.
 
 ---
 
+## 0.48.8 - 2026-09-12 - the repository was not a signed release
+
+Asked whether somebody who installed from a zip could now just use
+`/aki-agent:upgrade`, and checking rather than answering found that nobody
+could -- including the zip users, and including the machine being tested that
+night.
+
+`make_release.py` signs a zip. Until 0.48.2 a zip was the only way anybody got
+this package, so that was the only thing needing a signature. Then the
+repository became an install route: `marketplace add` clones it, and `upgrade`
+reads that clone out of Claude Code's plugin cache.
+`release_trust.verify_package()` looked there for `RELEASE.manifest` and
+`RELEASE.sig`, found neither, and returned "this release is not signed".
+
+So the one-command upgrade this package advertises ended at a refusal, and the
+only way past was `--allow-unsigned` -- teaching people to wave through exactly
+the check the signing exists to make. Measured, not reasoned about: the
+verdict was read off the real plugin cache on a real machine.
+
+- The repository carries its own `RELEASE.manifest` and `RELEASE.sig`, and a
+  clone now verifies as signed.
+- `bin/sign_repo.py` writes them, and refuses if the manifest describes
+  anything git does not carry -- a file signed but not cloned makes every
+  clone fail verification.
+- `tests/test_the_repo_is_signed.py` fails when the signature and the files
+  disagree. A manifest is a list of hashes, so a forgotten re-sign does not
+  read as "unsigned", it reads as TAMPERED WITH: a worse failure, and a much
+  more alarming one. It skips in a development checkout, which carries no
+  manifest.
+
+Signing is now the last step before a commit, after the version, the changelog
+and the tests. The test above is what catches it when it is not.
+
+2,026 tests.
+
+---
+
 ## What is still not true
 
 - **macOS is now run, but rarely.** The first real install was 2026-09-11
