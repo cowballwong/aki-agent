@@ -125,3 +125,182 @@ def test_it_is_one_of_the_checks_that_actually_runs():
 
     source = inspect.getsource(doctor.run_all)
     assert "check_scheduling_can_reach_the_workspace(loaded)" in source
+
+
+# ---------------------------------------------------------------------------
+# Refusing to create a task that could only ever fail
+# ---------------------------------------------------------------------------
+
+def _a_runner_at(folder: Path) -> Path:
+    folder.mkdir(parents=True, exist_ok=True)
+    runner = folder / "run-task.command"
+    runner.write_text("#!/bin/bash\n", encoding="utf-8")
+    return runner
+
+
+def test_a_task_whose_runner_is_in_documents_is_not_created(tmp_path,
+                                                            monkeypatch):
+    """The exists() check above this one passes every time: `install` runs in
+    a Terminal, and a Terminal can read Documents. launchd cannot. Seven tasks
+    walked through that gap and died at every firing."""
+    from aki_agent import schedule
+
+    monkeypatch.setattr(paths, "is_macos", lambda: True)
+    monkeypatch.setattr(paths, "home", lambda: tmp_path)
+    monkeypatch.setattr(schedule, "running_elevated", lambda: False)
+    runner = _a_runner_at(tmp_path / "Documents" / "Workspace" / "bin")
+
+    ok, message = schedule.install(schedule.DEFAULT_TASKS[0], runner,
+                                   confirmed=True)
+
+    assert ok is False
+    assert "Documents" in message
+    assert "Nothing was scheduled" in message
+
+
+def test_the_same_runner_somewhere_unrestricted_is_allowed_through(
+        tmp_path, monkeypatch):
+    """Whatever happens next, it is not this refusal -- the check must not
+    become a reason nobody can schedule anything."""
+    from aki_agent import schedule
+
+    monkeypatch.setattr(paths, "is_macos", lambda: True)
+    monkeypatch.setattr(paths, "home", lambda: tmp_path)
+    monkeypatch.setattr(schedule, "running_elevated", lambda: False)
+    runner = _a_runner_at(tmp_path / "Aki-Agent" / "bin")
+
+    _, message = schedule.install(schedule.DEFAULT_TASKS[0], runner,
+                                  confirmed=True)
+
+    assert "Documents" not in message
+
+
+def test_windows_schedules_from_documents_without_complaint(tmp_path,
+                                                            monkeypatch):
+    from aki_agent import schedule
+
+    monkeypatch.setattr(paths, "is_macos", lambda: False)
+    monkeypatch.setattr(paths, "home", lambda: tmp_path)
+    runner = _a_runner_at(tmp_path / "Documents" / "Workspace" / "bin")
+
+    _, message = schedule.install(schedule.DEFAULT_TASKS[0], runner,
+                                  confirmed=True)
+
+    assert "macOS" not in message
+
+
+# ---------------------------------------------------------------------------
+# Moving it, as one command rather than three manual steps
+# ---------------------------------------------------------------------------
+
+class _Args:
+    def __init__(self, to="", yes=False):
+        self.to = to
+        self.yes = yes
+
+
+def _config_rooted_at(root):
+    layout = type("L", (), {"root": str(root)})()
+    return type("C", (), {"layout": layout})()
+
+
+def test_moving_into_another_restricted_folder_is_refused(tmp_path,
+                                                          monkeypatch, capsys):
+    """Documents to Desktop is not a fix, and a command that says "done"
+    after doing it would be the same silent failure wearing a new hat."""
+    from aki_agent import cli
+
+    monkeypatch.setattr(paths, "is_macos", lambda: True)
+    monkeypatch.setattr(paths, "home", lambda: tmp_path)
+    source = tmp_path / "Documents" / "Workspace"
+    source.mkdir(parents=True)
+    monkeypatch.setattr(cli, "_load_config",
+                        lambda: (_config_rooted_at(source), ""))
+
+    code = cli.cmd_move_workspace(_Args(to=str(tmp_path / "Desktop" / "W"),
+                                        yes=True))
+
+    assert code == 1
+    assert "Desktop" in capsys.readouterr().out
+    assert source.exists(), "nothing may be moved when the target is refused"
+
+
+def test_nothing_moves_without_yes(tmp_path, monkeypatch, capsys):
+    from aki_agent import cli
+
+    monkeypatch.setattr(paths, "is_macos", lambda: True)
+    monkeypatch.setattr(paths, "home", lambda: tmp_path)
+    source = tmp_path / "Documents" / "Workspace"
+    source.mkdir(parents=True)
+    monkeypatch.setattr(cli, "_load_config",
+                        lambda: (_config_rooted_at(source), ""))
+
+    code = cli.cmd_move_workspace(_Args(to=str(tmp_path / "Aki-Agent")))
+
+    assert code == 0
+    assert "Nothing moved" in capsys.readouterr().out
+    assert source.exists()
+
+
+def test_an_occupied_target_is_not_merged(tmp_path, monkeypatch, capsys):
+    """Two workspaces poured into one folder is not a thing anybody can undo."""
+    from aki_agent import cli
+
+    monkeypatch.setattr(paths, "is_macos", lambda: True)
+    monkeypatch.setattr(paths, "home", lambda: tmp_path)
+    source = tmp_path / "Documents" / "Workspace"
+    source.mkdir(parents=True)
+    target = tmp_path / "Aki-Agent"
+    target.mkdir()
+    (target / "something-of-theirs.md").write_text("mine", encoding="utf-8")
+    monkeypatch.setattr(cli, "_load_config",
+                        lambda: (_config_rooted_at(source), ""))
+
+    code = cli.cmd_move_workspace(_Args(to=str(target), yes=True))
+
+    assert code == 1
+    assert "not empty" in capsys.readouterr().out
+    assert (target / "something-of-theirs.md").read_text(
+        encoding="utf-8") == "mine"
+
+
+def test_the_move_happens_and_the_new_location_is_recorded(tmp_path,
+                                                           monkeypatch, capsys):
+    """The part that touches somebody's actual files. Re-pointing is stubbed
+    here because launchd is not on this machine; what is checked is that the
+    work arrives intact and that the config is saved BEFORE re-pointing reads
+    it back -- saved after, the launcher would be written against a path that
+    no longer exists."""
+    from aki_agent import cli
+    from aki_agent import config as config_module
+
+    monkeypatch.setattr(paths, "is_macos", lambda: True)
+    monkeypatch.setattr(paths, "home", lambda: tmp_path)
+    source = tmp_path / "Documents" / "Workspace"
+    (source / "03_Workspace").mkdir(parents=True)
+    (source / "03_Workspace" / "notes.md").write_text("theirs",
+                                                      encoding="utf-8")
+    config = _config_rooted_at(source)
+    monkeypatch.setattr(cli, "_load_config", lambda: (config, ""))
+
+    saved_root_at_save_time = {}
+    monkeypatch.setattr(config_module, "save",
+                        lambda c, path=None: saved_root_at_save_time
+                        .setdefault("root", str(c.layout.root)))
+    seen = {}
+
+    def _remember_and_succeed(root=None):
+        seen["root"] = root
+        return 0
+
+    monkeypatch.setattr(cli, "_repoint", _remember_and_succeed)
+
+    target = tmp_path / "Aki-Agent"
+    code = cli.cmd_move_workspace(_Args(to=str(target), yes=True))
+
+    assert code == 0
+    assert not source.exists()
+    assert (target / "03_Workspace" / "notes.md").read_text(
+        encoding="utf-8") == "theirs"
+    assert saved_root_at_save_time["root"] == str(target)
+    assert seen["root"] == target / "01_Config" / "engine"

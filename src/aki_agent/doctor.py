@@ -827,12 +827,13 @@ def check_scheduling_can_reach_the_workspace(loaded) -> Check:
     return Check(
         "Scheduled work can reach your files", False, warning_only=True,
         detail=detail,
-        fix=("Either move your workspace somewhere macOS does not restrict "
-             "-- anywhere in your home folder that is not Documents, Desktop "
-             "or Downloads -- or grant Full Disk Access to the program that "
-             "runs your tasks, in System Settings > Privacy & Security > "
-             "Full Disk Access. Moving the folder is the smaller of the "
-             "two."))
+        fix=("Run `move-workspace` and it does the whole thing: moves the "
+             "folder somewhere macOS does not restrict, records the new "
+             "location, and re-points your scheduled tasks and launcher at "
+             "it. The alternative is granting Full Disk Access in System "
+             "Settings > Privacy & Security, but that grant goes to "
+             "/bin/bash rather than to your tasks, which is far more access "
+             "than this needs, and macOS drops it on major updates."))
 
 
 def check_no_stray_engines() -> Check:

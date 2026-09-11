@@ -271,6 +271,48 @@ fix.
 
 ---
 
+## 0.48.1 - 2026-09-11 - the check with no caller
+
+The first release where macOS was run on a real machine by somebody using it,
+and it failed in the way the list at the top of this file names third.
+
+`paths.inside_a_protected_folder()` knew the whole problem. macOS does not
+let anything started by launchd read `Documents`, `Desktop` or `Downloads`,
+so a workspace in one of them means every scheduled task installs, reports
+success, and then dies at exit 126 on every firing, silently, for as long as
+it exists. The function was written, documented at length, and covered by
+tests.
+
+It was called from `doctor`. Nowhere else. Setup did not ask it, and neither
+did the thing that creates the tasks - so seven tasks were created on a real
+Mac, all seven reported success, and none of them had ever run. The diagnosis
+existed and only spoke when somebody already suspected something.
+
+Three changes, in the order they matter:
+
+- **`schedule.install()` refuses** a task whose runner sits in a restricted
+  folder. The check directly above it asks whether the runner *exists*, which
+  is always true: install runs in a Terminal, and a Terminal can read
+  `Documents`. launchd cannot. Same note, same reason, right question.
+- **`move-workspace`** moves the folder, records the new location, and
+  re-points the schedule and the launcher at it - one command. The advice
+  before this was three manual steps ending in "work out which tasks fire",
+  which is advice nobody takes. Refuses a restricted target, refuses a
+  non-empty one, and moves nothing at all if either applies.
+- **Install says so while it is still a choice.** `default_root()` is the
+  folder Claude Code was started in, and people start terminals in
+  `Documents`. `suggest_root()` already steered away, but it only gets a vote
+  when nobody opened a terminal somewhere else.
+
+Full Disk Access is the other way out and is not recommended anywhere in this
+release. The runner is a bash script, TCC grants to the interpreter, so the
+grant is `/bin/bash` reading the entire disk - far more access than the
+problem needs, and dropped again on the next major macOS update.
+
+2,003 tests.
+
+---
+
 ## What is still not true
 
 - **macOS is now run, but rarely.** The first real install was 2026-09-11

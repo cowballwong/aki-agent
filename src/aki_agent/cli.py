@@ -459,6 +459,39 @@ def cmd_scaffold(args) -> int:
 
     if adopting:
         print(f"Installing here: {root}")
+
+        # Said at the moment the folder is chosen, not months later.
+        #
+        # WHY THIS IS PRINTED AND NOT SWALLOWED (a test Mac, 2026-09-11)
+        # --------------------------------------------------------------
+        # `default_root()` is the folder Claude Code was started in, and
+        # people start terminals in `Documents`. On macOS that one choice
+        # silently disables every scheduled task forever: launchd's children
+        # have no Full Disk Access, so each task installs, reports success,
+        # and then fails at every firing. That machine ran with seven dead
+        # tasks and no symptom until somebody went looking.
+        #
+        # `suggest_root()` already steers away from Documents, but it only
+        # gets a vote when nobody has opened a terminal somewhere else, which
+        # is not the common path. `doctor` explains it afterwards, which is
+        # too late to change the decision. This is the one place that sees
+        # the folder while it is still a choice.
+        #
+        # A warning, not a refusal: the interactive half of the assistant
+        # works perfectly well in Documents, and it is their machine. The
+        # refusal lives in `schedule.install()`, where the thing that would
+        # actually break is created.
+        guarded = paths_module.inside_a_protected_folder(root)
+        if guarded:
+            print()
+            print(f"  Note: this is inside {guarded}, which macOS does not "
+                  "let scheduled")
+            print("  tasks read. Everything you do here by hand works "
+                  "normally, but")
+            print("  nothing can be scheduled to run on its own until the "
+                  "folder moves")
+            print("  somewhere else in your home folder. Run `doctor` for "
+                  "the detail.")
         print()
     print(the_plan.describe())
 
@@ -1943,6 +1976,125 @@ def _repoint_after_upgrade(target: Path, record) -> list[str]:
     return failures
 
 
+def cmd_move_workspace(args) -> int:
+    """Move the whole workspace somewhere macOS will let a scheduler read.
+
+    WHY THIS IS A COMMAND AND NOT AN INSTRUCTION (a test Mac, 2026-09-11)
+    ---------------------------------------------------------------------
+    The fix for a workspace in `Documents` was three manual steps: drag the
+    folder, edit seven plists that hold absolute paths into it, then work out
+    which of them actually fire. `doctor` said "move your workspace" and left
+    all three to the person, so the realistic outcome was that nobody moved
+    it and seven tasks stayed dead.
+
+    Everything needed was already here -- `_repoint()` rewrites the schedule
+    and the launcher against a new package root, which is exactly what a move
+    produces. The only missing piece was moving the folder and saving the new
+    location before calling it.
+
+    The alternative on offer, Full Disk Access, means granting `/bin/bash`
+    unrestricted read of the whole disk, because the runner is a bash script
+    and TCC grants to the interpreter rather than the job. That is a much
+    larger permission than the problem needs, and macOS resets it on major
+    updates, at which point everything fails silently again.
+    """
+    from . import config as config_module_local
+    from . import paths as paths_module_local
+
+    config, problem = _load_config()
+    if not config:
+        print(problem)
+        return 1
+
+    source = config.layout.root
+    if not source:
+        print("No workspace is recorded yet, so there is nothing to move. "
+              "Run setup first.")
+        return 1
+
+    source = Path(source).expanduser().resolve()
+    if not source.exists():
+        print(f"The recorded workspace, {source}, is not there. Nothing was "
+              "moved.")
+        return 1
+
+    target = (Path(args.to).expanduser() if args.to
+              else paths_module_local.home() / "Aki-Agent")
+    try:
+        target = target.resolve()
+    except OSError as exc:                                # pragma: no cover
+        print(f"Could not read {target}: {exc}")
+        return 1
+
+    if target == source:
+        print(f"The workspace is already at {target}. Nothing to do.")
+        return 0
+
+    # Never move a folder into itself. `shutil.move` would build a path that
+    # recurses, and the failure arrives partway through with the workspace
+    # half in each place.
+    if source in target.parents:
+        print(f"{target} is inside the workspace itself, so moving there "
+              "would nest the folder in its own copy. Pick somewhere else.")
+        return 1
+
+    guarded = paths_module_local.inside_a_protected_folder(target)
+    if guarded:
+        print(f"{target} is inside {guarded}, which is the same restriction "
+              "this move exists to escape. macOS does not let scheduled "
+              "tasks read it either. Pick somewhere in your home folder "
+              "that is not Documents, Desktop or Downloads.")
+        return 1
+
+    if target.exists() and any(target.iterdir()):
+        print(f"{target} already exists and is not empty. Refusing to merge "
+              "two workspaces -- pick a folder that does not exist yet.")
+        return 1
+
+    print(f"Move: {source}")
+    print(f"  to: {target}")
+    print()
+    print("This moves the folder, records the new location, and re-points "
+          "your scheduled")
+    print("tasks and launcher at it. Your files are moved, not copied and "
+          "not changed.")
+
+    if not args.yes:
+        print()
+        print("Nothing moved. Re-run with --yes to do it.")
+        return 0
+
+    import shutil
+
+    target.parent.mkdir(parents=True, exist_ok=True)
+    try:
+        shutil.move(str(source), str(target))
+    except (OSError, shutil.Error) as exc:
+        print(f"FAILED -- the folder was not moved: {exc}")
+        print("Nothing else was changed, so your setup still points at the "
+              "old location.")
+        return 1
+    print(f"  ok -- moved to {target}")
+
+    # Saved before re-pointing, not after. `_repoint` reads `layout.root` back
+    # out of the config to write the launcher, so a save that came later would
+    # hand it the path that no longer exists.
+    config.layout.root = target
+    try:
+        config_module_local.save(config)
+    except Exception as exc:                              # noqa: BLE001
+        print(f"FAILED -- the folder moved but the new location could not be "
+              f"saved: {exc}")
+        print(f"Your workspace is now at {target}. Nothing else will find it "
+              "until that is recorded.")
+        return 1
+    print("  ok -- recorded the new location")
+
+    print()
+    print("Re-pointing the schedule and launcher:")
+    return _repoint(target / "01_Config" / "engine")
+
+
 def _repoint(root: "Path | None" = None) -> int:
     """Re-point the scheduled tasks and the launcher at `root`.
 
@@ -2761,6 +2913,18 @@ def build_parser() -> argparse.ArgumentParser:
                            help="install a release whose signature could not "
                                 "be verified (you are vouching for it)")
     upgrading.set_defaults(func=cmd_upgrade)
+
+    moving_workspace = subparsers.add_parser(
+        "move-workspace",
+        help="move the workspace somewhere scheduled tasks can read it")
+    moving_workspace.add_argument(
+        "--to", default="",
+        help="where to move it (default: a folder called Aki-Agent in your "
+             "home folder)")
+    moving_workspace.add_argument("--yes", action="store_true",
+                                  help="actually move it (without this, "
+                                       "only report)")
+    moving_workspace.set_defaults(func=cmd_move_workspace)
 
     stocking = subparsers.add_parser(
         "library", help="what the package ships, and what is switched on")

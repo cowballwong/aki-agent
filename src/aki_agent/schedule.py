@@ -1357,6 +1357,34 @@ def _install(task: ScheduledTask, runner: Path,
             "would have been created and then failed every time it ran."
         )
 
+    # The same refusal, for the same reason, one layer further out.
+    #
+    # WHY EXISTS() IS NOT ENOUGH (a test Mac, 2026-09-11)
+    # ---------------------------------------------------
+    # The check above asks "is the runner there?" and it always says yes,
+    # because `install()` runs in a Terminal somebody is sitting at, and a
+    # Terminal can read `Documents`. launchd cannot. So all seven tasks on
+    # that machine installed, reported success, and then died at exit 126 on
+    # every firing for as long as they existed -- the precise failure the note
+    # on `runner_script()` says this check exists to prevent, walking straight
+    # past the check because it was asking the wrong question.
+    #
+    # `paths.inside_a_protected_folder()` was written for this and then wired
+    # to nothing but `doctor`, which only speaks when somebody thinks to ask
+    # it. A diagnosis nobody runs is not a fix. The refusal belongs where the
+    # task is created, so that every caller gets it -- `setup`, `repair`,
+    # `upgrade`, the dashboard's install button, and the one added next.
+    guarded = paths.inside_a_protected_folder(runner)
+    if guarded:
+        return False, (
+            f"Nothing was scheduled: the task would run {runner}, which is "
+            f"inside {guarded}. macOS does not let anything started by a "
+            "scheduler read that folder, so the task would have been created, "
+            "reported success, and then failed silently every time it ran. "
+            "Move your workspace somewhere in your home folder that is not "
+            "Documents, Desktop or Downloads, then schedule it again."
+        )
+
     if paths.is_windows():
         # The XML goes to a directory of this process's own, not the shared
         # temp folder: a task definition is a thing that will be executed, and
