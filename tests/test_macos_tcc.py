@@ -414,3 +414,93 @@ def test_windows_installs_in_documents_without_being_moved(tmp_path,
 
     assert config.layout.root == started_in
     assert "Not installing in" not in capsys.readouterr().out
+
+
+# ---------------------------------------------------------------------------
+# launchd hands a job four directories, and `claude` is in none of them
+#
+# Reported from a real Mac, 2026-09-11. Every scheduled task raised
+# ClaudeNotFound and died, while the same command run by hand in a terminal
+# worked. launchd gives its children `/usr/bin:/bin:/usr/sbin:/sbin`; Claude
+# Code's installer puts `claude` in `~/.local/bin`.
+
+
+def test_claude_is_found_when_path_does_not_contain_it(tmp_path, monkeypatch):
+    from aki_agent import runner
+
+    installed = tmp_path / ".local" / "bin" / "claude"
+    installed.parent.mkdir(parents=True)
+    installed.write_text("#!/bin/sh\n", encoding="utf-8")
+
+    monkeypatch.setattr(runner.shutil, "which", lambda name: None)
+    monkeypatch.setattr(runner.paths, "is_windows", lambda: False)
+    monkeypatch.setattr(runner, "CLAUDE_LIKELY_AT", (str(installed),))
+
+    assert runner.find_claude() == str(installed)
+
+
+def test_the_path_still_wins_when_it_has_an_answer(tmp_path, monkeypatch):
+    """Only after PATH has failed. Somebody who put a particular `claude` on
+    their PATH chose it, and a list of guesses must never overrule that."""
+    from aki_agent import runner
+
+    theirs = tmp_path / "theirs" / "claude"
+    theirs.parent.mkdir(parents=True)
+    theirs.write_text("#!/bin/sh\n", encoding="utf-8")
+    ours = tmp_path / ".local" / "bin" / "claude"
+    ours.parent.mkdir(parents=True)
+    ours.write_text("#!/bin/sh\n", encoding="utf-8")
+
+    monkeypatch.setattr(runner.shutil, "which", lambda name: str(theirs))
+    monkeypatch.setattr(runner.paths, "is_windows", lambda: False)
+    monkeypatch.setattr(runner, "CLAUDE_LIKELY_AT", (str(ours),))
+
+    assert runner.find_claude() == str(theirs)
+
+
+def test_it_still_says_so_when_claude_really_is_not_there(tmp_path,
+                                                          monkeypatch):
+    """The guesses must not turn a missing install into a confusing failure
+    further down."""
+    import pytest as _pytest
+
+    from aki_agent import runner
+
+    monkeypatch.setattr(runner.shutil, "which", lambda name: None)
+    monkeypatch.setattr(runner.paths, "is_windows", lambda: False)
+    monkeypatch.setattr(runner, "CLAUDE_LIKELY_AT",
+                        (str(tmp_path / "nowhere" / "claude"),))
+
+    with _pytest.raises(runner.ClaudeNotFound):
+        runner.find_claude()
+
+
+def test_the_plist_carries_a_path_for_whatever_the_task_runs(tmp_path,
+                                                             monkeypatch):
+    """The other half. `find_claude` fixes this package; the plist fixes
+    everything the task goes on to invoke."""
+    from aki_agent import schedule
+
+    monkeypatch.setattr(schedule.paths, "home", lambda: tmp_path)
+
+    written = schedule.launchd_plist(schedule.DEFAULT_TASKS[0],
+                                     tmp_path / "bin" / "run-task.command")
+
+    assert "<key>EnvironmentVariables</key>" in written
+    assert f"{tmp_path}/.local/bin" in written
+    assert "/opt/homebrew/bin" in written
+    assert "/usr/bin" in written
+
+
+def test_the_plist_path_is_expanded_not_a_tilde(tmp_path, monkeypatch):
+    """launchd does not expand `~` inside a plist value, so a tilde there is
+    a directory that does not exist rather than the user's home."""
+    from aki_agent import schedule
+
+    monkeypatch.setattr(schedule.paths, "home", lambda: tmp_path)
+
+    written = schedule.launchd_plist(schedule.DEFAULT_TASKS[0],
+                                     tmp_path / "bin" / "run-task.command")
+    inside = written.split("<key>EnvironmentVariables</key>", 1)[1]
+
+    assert "~" not in inside.split("</dict>", 1)[0]

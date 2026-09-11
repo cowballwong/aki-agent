@@ -412,6 +412,50 @@ config is never quietly turned into filtering by it.
 
 ---
 
+## 0.48.5 - 2026-09-11 - launchd hands a job four directories
+
+With the workspace out of `Documents`, the scheduled tasks still did not run.
+Different cause, same shape.
+
+`runner.find_claude()` was `shutil.which("claude")` and nothing else.
+`shutil.which` reads `PATH`, and a scheduled job does not get the `PATH` a
+terminal gets: launchd hands its children `/usr/bin:/bin:/usr/sbin:/sbin`,
+while Claude Code's own installer puts `claude` in `~/.local/bin`. So every
+task raised `ClaudeNotFound` and died, while the same command typed into a
+terminal worked perfectly.
+
+The note directly under that function already said a scheduled run does not
+inherit the terminal's environment -- it is why `ANTHROPIC_BASE_URL` is put
+back by hand for anyone running a local model. The reasoning was right and
+`PATH` was simply never one of the pieces it was applied to.
+
+- `find_claude()` falls back to the places Claude Code is actually installed
+  once `PATH` has failed: `~/.local/bin`, Homebrew on both architectures, and
+  the usual npm prefixes. Only after `PATH` has failed -- somebody who put a
+  particular `claude` on their `PATH` chose it, and a list of guesses must
+  never overrule that.
+- The launchd plist now sets `EnvironmentVariables/PATH`, so anything a task
+  goes on to invoke gets the same directories rather than each caller growing
+  its own list of likely locations. Written out in full, because launchd does
+  not expand `~` inside a plist value.
+- `bin/*.command` and `bin/check.sh` are marked executable in git. They were
+  mode 644, so a marketplace install -- which is a clone -- produced scripts
+  the system would not run. The zip build had always set the bit, which is
+  why this never showed up before the repository became an install route in
+  0.48.2.
+
+2,018 tests, three checked red against the code with the fix removed. The two
+that pass either way are the guards: that `PATH` still wins when it has an
+answer, and that a genuinely missing install still says so.
+
+Not changed, because neither is a fault: scheduled results arriving during
+quiet hours are held in `state/held-messages.json` and released afterwards,
+and scheduled runs are given Read, Grep and Glob rather than network access.
+A task that needs to fetch something needs that decision made deliberately,
+not inherited from a bug fix.
+
+---
+
 ## What is still not true
 
 - **macOS is now run, but rarely.** The first real install was 2026-09-11
