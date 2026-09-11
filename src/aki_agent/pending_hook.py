@@ -119,6 +119,88 @@ def collected() -> str:
     return "\n".join(lines)
 
 
+def background_block() -> str:
+    """What the session could not possibly know, put in front of it anyway.
+
+    Two things, answering two different failures.
+
+    OPEN DECISIONS, because a one-word reply has to land somewhere
+    --------------------------------------------------------------
+    Scheduled work raises questions from its own run and then stops existing.
+    When the answer comes back -- "yes", "the second one", "do it" -- the
+    session reading it never asked anything.
+
+    `agents/assistant.md` already tells the assistant to go and read the log
+    when a message looks like a fragment, and that stays. But an instruction
+    is followed by a model that remembers to, and a hook is followed by all of
+    them; and reading a log cannot tell two open questions apart, because a
+    log does not record which answers are still outstanding. `approvals` does.
+
+    WHAT WAS RECENTLY SENT, because no memory of it looks like it never happened
+    ---------------------------------------------------------------------------
+    The last few things the assistant's own scheduled work sent out. Labelled
+    as a log and not as a list of jobs, because a session handed a list of
+    things it has apparently not done will helpfully do them again.
+
+    Costs one small JSON read and a tail of the chat log. Says nothing when
+    there is nothing, like every other line in this file.
+    """
+    lines: list[str] = []
+
+    try:
+        from . import approvals
+
+        waiting = [item for item in approvals.open_items()
+                   if item.kind in ("question", "draft")]
+    except Exception:                                     # noqa: BLE001
+        waiting = []
+
+    if waiting:
+        lines.append(
+            "These are still waiting for your user's answer. If what they "
+            "just said answers one of them, THAT is what it means -- do not "
+            "read it as following on from your own last message:")
+        for item in waiting[:3]:
+            one = f"  - [{item.id}] {item.title}"
+            if item.options:
+                one += ("  (" + " | ".join(f"{o.key}={o.label}"
+                                           for o in item.options[:4]) + ")")
+            lines.append(one)
+        lines += [
+            "",
+            "Record the answer against the item, so it stops being open:",
+            "  aki_agent.cli answer <id> <option key>",
+            "  aki_agent.cli answer <id> --text \"what they actually said\"",
+            "",
+        ]
+
+    try:
+        from . import chat
+
+        sent = [line for line in chat.read(limit=40)
+                if line.role == "assistant"
+                and str((line.meta or {}).get("origin", "")).startswith("task:")]
+    except Exception:                                     # noqa: BLE001
+        sent = []
+
+    if sent:
+        lines.append("Your scheduled work has ALREADY sent these. A log, not "
+                     "a to-do list -- never send one of them again:")
+        for line in sent[-3:]:
+            # Flattened to one line each. A scheduled result is
+            # often a formatted digest, and pasting its newlines
+            # into this block breaks the list apart -- the reader
+            # can no longer tell where one message ends.
+            said = " ".join(line.text.split())[:160]
+            lines.append(f"  - [{line.at.strftime('%H:%M')}] {said}")
+
+    if not lines:
+        return ""
+    return ("<background-conversation>" + "\n"
+            + "\n".join(lines) + "\n"
+            + "</background-conversation>")
+
+
 def main(argv: list[str] | None = None) -> int:
     """Entry point for the UserPromptSubmit hook.
 
@@ -143,7 +225,8 @@ def main(argv: list[str] | None = None) -> int:
         if not isinstance(payload, dict) or not mine(payload):
             return 0
 
-        text = collected()
+        blocks = [collected(), background_block()]
+        text = "\n".join(one for one in blocks if one)
         if text:
             print(text)
     except Exception:                                     # noqa: BLE001

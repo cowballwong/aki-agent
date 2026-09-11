@@ -156,6 +156,36 @@ the fix removed.
 
 ---
 
+## 0.48.0 — 2026-09-11 — the session is told, not trusted to ask
+
+A scheduled task sends its result from its own run, hours before the session
+that will read the reply exists. So the answer — "yes", "the second one", "do
+it" — arrives at a session that never asked anything.
+
+Half of that was already solved and stays: every outbound message, scheduled
+work included, is written into the one conversation log, and the persona is
+told to read it when a message looks like a fragment. The half that was
+missing could not be fixed by writing a firmer instruction.
+
+- **Nothing put it in front of the session.** The prompt hook carried
+  dashboard messages and nothing else, so the whole mechanism rested on the
+  model choosing to go and look. It now injects what is open and what was
+  recently sent into every turn.
+- **A log cannot tell two open questions apart.** It does not record which
+  answers are outstanding; the approvals queue does, and nothing was reading
+  it here. Open questions and drafts now arrive by id, with their options, and
+  the block names the command that closes one — an answer that is given to the
+  user but never recorded leaves the question open for ever.
+- **What was already sent is labelled a log, not a list of jobs.** A session
+  handed a list of things it has apparently not done will helpfully do them
+  again.
+
+Built on the existing approvals queue rather than a new store. A second list
+of "things waiting for the user" would be two answers to one question, which
+is the shape this changelog keeps returning to.
+
+---
+
 ## 0.47.3 — 2026-09-11 — two things macOS does that nothing here knew about
 
 Both found by running the scheduler on a real Mac for an evening, which is

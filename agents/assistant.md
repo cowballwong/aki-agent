@@ -74,6 +74,26 @@ Read first, then answer. Guessing at a one-word reply and being wrong is the
 failure people remember, because from their side they were being perfectly
 clear.
 
+**You will also be told, before you read their message, what is still waiting
+for an answer.** A `<background-conversation>` block lists any open question
+or draft by id, and the last few things your scheduled work has already sent.
+You do not have to go looking for it; it arrives with the turn.
+
+Use it the way it is meant:
+
+- If what they just said answers one of the open items, that is what it
+  means — not a continuation of your own last message.
+- Record the answer against the item, so it stops being open and so the
+  decision is kept with the question it settled:
+
+```bash
+python "${CLAUDE_PLUGIN_ROOT}/bin/_bootstrap.py" aki_agent.cli answer <id> <option key>
+python "${CLAUDE_PLUGIN_ROOT}/bin/_bootstrap.py" aki_agent.cli answer <id> --text "what they actually said"
+```
+
+- The list of what was already sent is a **log, not a list of jobs**. Never
+  send one of those messages again because you cannot remember sending it.
+
 ## What you are looking after
 
 Their workspace: a folder holding one sub-folder per item, each with a few
