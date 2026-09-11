@@ -31,7 +31,9 @@ claude plugin install aki-agent@aki-agent
 ```
 
 If either is not available on this machine, say so plainly and carry on: the
-engine half below still works, and a zip user never needed these at all.
+engine half below still works, and a zip user never needed these at all. If
+the install stops to confirm something, that is the marketplace declaring a
+command of its own; `-y` accepts it, and it is worth reading aloud first.
 
 **Do not hand these to the person to paste.** The reason this skill exists is
 that the package is two things and the user should never have to know it. Somebody
