@@ -531,3 +531,42 @@ def test_the_plist_path_is_expanded_not_a_tilde(tmp_path, monkeypatch):
     inside = written.split("<key>EnvironmentVariables</key>", 1)[1]
 
     assert "~" not in inside.split("</dict>", 1)[0]
+
+
+# ---------------------------------------------------------------------------
+# A line that says something was held must say what held it
+#
+# A task ran at 23:50, took 32 seconds, succeeded and sent nothing. The only
+# evidence was "(held, not delivered)" -- which says something held it, not
+# what, and not when the thing will arrive. Working that out meant reading the
+# notifier's rules and the held-message file. `notify.send()` already returns
+# the reason; it was being discarded one line before it could be printed.
+
+
+def test_the_reason_is_in_the_line(tmp_path):
+    from aki_agent.tasks import TaskOutcome
+
+    line = TaskOutcome("test-weather", True, "finished", delivered=False,
+                       seconds=32, held_because="quiet hours").report()
+
+    assert "quiet hours" in line
+    assert "held" in line
+
+
+def test_a_delivered_task_says_nothing_about_holding(tmp_path):
+    from aki_agent.tasks import TaskOutcome
+
+    line = TaskOutcome("morning-summary", True, "done", delivered=True,
+                       seconds=4).report()
+
+    assert "held" not in line
+
+
+def test_an_unexplained_hold_still_says_it_was_held(tmp_path):
+    """The reason is an improvement, not a precondition. A hold with no reason
+    recorded must not become a line that reads as though it was delivered."""
+    from aki_agent.tasks import TaskOutcome
+
+    line = TaskOutcome("x", True, "done", delivered=False, seconds=1).report()
+
+    assert "held" in line

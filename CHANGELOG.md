@@ -483,6 +483,32 @@ Two smaller things fell out of writing it:
 
 ---
 
+## 0.48.7 - 2026-09-12 - a line that says it was held, and what held it
+
+A task ran at 23:50, took 32 seconds, succeeded, and sent nothing. The whole
+of the evidence was `(held, not delivered)`. That says something held it. It
+does not say what, and it does not say when the thing will arrive, so working
+it out meant reading the notifier's rules and the held-message file.
+
+`notify.send()` already returns the reason -- "quiet hours", "the telegram
+channel is switched off", "notifications are switched off". It was being
+discarded one line before it could be printed. The line now carries it, and
+says the message goes out when that reason stops applying.
+
+A hold with no reason recorded still says it was held. The reason is an
+improvement, not a precondition, and a hold must never read as a delivery.
+
+2,023 tests.
+
+### Still not fixed
+
+`test_the_schedule_page_renders_its_tasks_once` fails in roughly one full-suite
+run in four, and passes alone, in its own module repeatedly, and paired with
+every module a bisect implicated. It is a test-isolation problem, not a fault
+in the product, and it is written down here rather than quietly left out.
+
+---
+
 ## What is still not true
 
 - **macOS is now run, but rarely.** The first real install was 2026-09-11

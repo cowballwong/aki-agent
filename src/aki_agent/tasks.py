@@ -46,12 +46,33 @@ class TaskOutcome:
     message: str
     delivered: bool = False
     seconds: float = 0.0
+    # Why nothing was sent, in the notifier's own words -- "quiet hours",
+    # "the telegram channel is switched off", "notifications are switched
+    # off". Empty when it was delivered, or when nothing decided not to.
+    held_because: str = ""
 
     def report(self) -> str:
+        """One line, and it has to answer the question somebody actually has.
+
+        WHY THE REASON IS IN HERE (2026-09-11)
+        ---------------------------------------
+        This used to end "(held, not delivered)". A task ran at 23:50, took
+        32 seconds, succeeded, and sent nothing -- and that line was the only
+        evidence. It says something was held; it does not say what did the
+        holding, and it does not say when the thing will arrive. Working that
+        out took reading the notifier's rules and the held-message file.
+
+        `notify.send()` already returns the reason. It was being thrown away
+        one line before it could be printed.
+        """
         state = "ok" if self.ok else "FAILED"
         line = f"[{state}] {self.key} ({self.seconds:.0f}s) — {self.message}"
         if self.ok and not self.delivered:
-            line += " (held, not delivered)"
+            if self.held_because:
+                line += f" (held: {self.held_because}; it will be sent when "
+                line += "that no longer applies)"
+            else:
+                line += " (held, not delivered)"
         return line
 
 
@@ -310,7 +331,9 @@ def run_one(key: str, channel: str = "",
         events.record("note", f"me time: raised {count} thing(s)",
                       source="schedule", detail={"task": key})
         return TaskOutcome(key, True, f"raised {count} thing(s)",
-                           delivered=decision.deliver)
+                           delivered=decision.deliver,
+                           held_because="" if decision.deliver
+                           else decision.reason)
 
     # Delivering what was held is this package's own job, not the model's.
     #
@@ -460,7 +483,9 @@ def run_one(key: str, channel: str = "",
                            origin=f"task:{task.key}", now=now)
 
     return TaskOutcome(key, True, result.summary(),
-                       delivered=decision.deliver, seconds=result.seconds)
+                       delivered=decision.deliver, seconds=result.seconds,
+                       held_because="" if decision.deliver
+                       else decision.reason)
 
 
 def _prompt_for(task: schedule.ScheduledTask, loaded) -> str:
