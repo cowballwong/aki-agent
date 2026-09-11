@@ -16,7 +16,7 @@ means in specifics:
 
 | | |
 |---|---|
-| Version | 0.48.5 |
+| Version | 0.48.6 |
 | Tests | 1,947, all passing |
 | Run on Windows | Yes, daily, by the author |
 | Run on macOS | **Never.** Not one line has knowingly executed on a Mac. The Mac code is written and reviewed; it is not observed |

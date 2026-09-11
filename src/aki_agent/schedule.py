@@ -1162,31 +1162,15 @@ def launchd_plist(task: ScheduledTask, runner: Path) -> str:
     log_path = paths.log_dir() / f"{task.key}.log"
 
     # The PATH a launchd job gets is `/usr/bin:/bin:/usr/sbin:/sbin`, and
-    # `claude` is in none of those.
+    # almost nothing this package needs is in those four. `claude` raised
+    # ClaudeNotFound at every firing; once that was fixed, the Telegram
+    # plugin could not start because `bun` was missing too.
     #
-    # WHY THIS BLOCK EXISTS (2026-09-11)
-    # -----------------------------------
-    # Claude Code's installer puts `claude` in `~/.local/bin`; Homebrew uses
-    # `/opt/homebrew/bin`. A scheduled task therefore raised ClaudeNotFound
-    # and died at every firing, while the same command run by hand in a
-    # terminal worked -- because the terminal's PATH has those directories
-    # and launchd's does not.
-    #
-    # `runner.find_claude()` now looks in the usual places itself, which is
-    # the fix that matters and the one that cannot be undone by anything.
-    # This block is the other half: anything the task goes on to invoke --
-    # `git`, a formatter, a user's own script -- gets the same directories,
-    # rather than each one having to grow its own list of likely locations.
-    #
-    # Built from the real home folder rather than written as `~`: launchd
-    # does not expand a tilde inside a plist value.
-    home = paths.home()
-    job_path = ":".join((
-        f"{home}/.local/bin",
-        "/opt/homebrew/bin",
-        "/usr/local/bin",
-        "/usr/bin", "/bin", "/usr/sbin", "/sbin",
-    ))
+    # The list lives in `paths.EXTRA_BIN_DIRS` and is read by
+    # `runner.find_claude()` as well -- see the note there. It was two lists
+    # for one hour, and that hour is exactly how long it took for the second
+    # one to be missing a directory the first one needed.
+    job_path = paths.job_path()
 
     return f"""<?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN"

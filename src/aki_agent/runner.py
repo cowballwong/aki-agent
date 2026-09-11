@@ -146,46 +146,39 @@ def scheduled_tools() -> tuple[str, ...]:
     return ("--allowedTools", *allowed)
 
 
-# Where Claude Code actually is, when the environment does not say.
-#
-# WHY A LIST AND NOT JUST `PATH` (2026-09-11)
-# --------------------------------------------
-# `shutil.which` reads `PATH`, and a scheduled job does not get the `PATH` a
-# terminal gets. launchd hands its children `/usr/bin:/bin:/usr/sbin:/sbin`
-# and nothing else. Claude Code's own installer puts `claude` in
-# `~/.local/bin`, which is in none of those four -- so on macOS every
-# scheduled task raised `ClaudeNotFound` and died, while the identical
-# command worked perfectly when the person ran it themselves.
-#
-# That is the same mistake as the note below about `ANTHROPIC_BASE_URL`: a
-# scheduled run does not inherit the terminal's environment, and every piece
-# of it this package needs has to be put back deliberately. The note was
-# there; `PATH` was simply never one of the pieces.
-#
-# Windows is left to `PATH` alone -- `claude` is a `.CMD` shim there, its
-# location varies by installer, and `shutil.which` with PATHEXT already
-# handles the case that matters.
-CLAUDE_LIKELY_AT = (
-    "~/.local/bin/claude",            # Claude Code's own installer
-    "/opt/homebrew/bin/claude",       # Homebrew, Apple silicon
-    "/usr/local/bin/claude",          # Homebrew on Intel, and npm -g
-    "~/.npm-global/bin/claude",       # npm with a user prefix
-    "~/.bun/bin/claude",
-    "~/.volta/bin/claude",
-)
-
-
 def find_claude() -> str:
+    """Where `claude` is, even when the environment will not say.
+
+    WHY A SEARCH AND NOT JUST `PATH` (2026-09-11)
+    ----------------------------------------------
+    `shutil.which` reads `PATH`, and a scheduled job does not get the `PATH`
+    a terminal gets. launchd hands its children `/usr/bin:/bin:/usr/sbin:
+    /sbin` and nothing else, while Claude Code's installer puts `claude` in
+    `~/.local/bin`. So every scheduled task raised `ClaudeNotFound` and died,
+    while the identical command worked when the person ran it themselves.
+
+    That is the same mistake as the note below about `ANTHROPIC_BASE_URL`: a
+    scheduled run does not inherit the terminal's environment, and every
+    piece of it this package needs has to be put back deliberately. The note
+    was there; `PATH` was simply never one of the pieces.
+
+    The directories are `paths.EXTRA_BIN_DIRS`, shared with the PATH written
+    into the launchd plist, because two lists of the same thing drift.
+
+    Windows is left to `PATH` alone -- `claude` is a `.CMD` shim there, its
+    location varies by installer, and `shutil.which` with PATHEXT already
+    handles the case that matters.
+    """
     executable = shutil.which("claude")
     if executable:
         return executable
 
     # Only after PATH has failed, so nobody's own choice is ever overridden.
     if not paths.is_windows():
-        for candidate in CLAUDE_LIKELY_AT:
-            resolved = Path(candidate).expanduser()
-            if resolved.is_file() and os.access(resolved, os.X_OK):
-                return str(resolved)
+        for folder in paths.extra_bin_dirs():
+            candidate = folder / "claude"
+            if candidate.is_file() and os.access(candidate, os.X_OK):
+                return str(candidate)
 
     raise ClaudeNotFound(
         "The `claude` command was not found, so scheduled work cannot "

@@ -264,6 +264,62 @@ def ensure_app_dirs() -> None:
 # codebase are how software quietly becomes single-platform.
 # --------------------------------------------------------------------------
 
+# Where the tools a scheduled job runs actually live.
+#
+# WHY THIS LIST EXISTS, AND WHY IT IS ONLY ONE (2026-09-11)
+# ---------------------------------------------------------
+# launchd hands its children `/usr/bin:/bin:/usr/sbin:/sbin` and nothing
+# else. Almost nothing this package depends on is in those four:
+#
+#   ~/.local/bin      `claude`, from Claude Code's own installer
+#   /opt/homebrew/bin Homebrew on Apple silicon
+#   /usr/local/bin    Homebrew on Intel, and npm -g
+#   ~/.bun/bin        `bun`, which the Claude Code channel plugins run on
+#
+# 0.48.5 fixed the first of those and shipped the fix as TWO lists -- one
+# written into the launchd plist, one inside `runner.find_claude()`. Within
+# the hour a scheduled run failed again because the Telegram plugin could not
+# start: `bun` was in neither list. Two lists of the same thing drift, and
+# the second one is always the one somebody forgets.
+#
+# So: one list, read by both. Adding a directory is one edit, in one place.
+EXTRA_BIN_DIRS = (
+    "~/.local/bin",
+    "/opt/homebrew/bin",
+    "/usr/local/bin",
+    "~/.bun/bin",
+    "~/.npm-global/bin",
+    "~/.volta/bin",
+    "~/.deno/bin",
+)
+
+# The four launchd guarantees, kept last so nothing above is shadowed by a
+# system copy of the same name.
+SYSTEM_BIN_DIRS = ("/usr/bin", "/bin", "/usr/sbin", "/sbin")
+
+
+def extra_bin_dirs() -> tuple[Path, ...]:
+    """`EXTRA_BIN_DIRS` with `~` resolved against this user's home."""
+    return tuple(Path(one.replace("~", str(home()), 1)) if one.startswith("~")
+                 else Path(one) for one in EXTRA_BIN_DIRS)
+
+
+def job_path() -> str:
+    """The PATH to hand a scheduled job.
+
+    Written out in full rather than with a `~`: launchd does not expand a
+    tilde inside a plist value, so a tilde there names a directory that does
+    not exist.
+    """
+    # `as_posix`, not `str`. This value is read by launchd, which is POSIX
+    # by definition -- and the tests for it run on Windows, where `str(Path)`
+    # produces backslashes and a separator that is already the PATH
+    # delimiter. Building the string the target platform uses, rather than
+    # the one the developer happens to be on, is the whole point.
+    return ":".join([one.as_posix() for one in extra_bin_dirs()]
+                    + list(SYSTEM_BIN_DIRS))
+
+
 def is_windows() -> bool:
     return sys.platform.startswith("win")
 

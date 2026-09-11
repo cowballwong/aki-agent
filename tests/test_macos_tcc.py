@@ -434,7 +434,7 @@ def test_claude_is_found_when_path_does_not_contain_it(tmp_path, monkeypatch):
 
     monkeypatch.setattr(runner.shutil, "which", lambda name: None)
     monkeypatch.setattr(runner.paths, "is_windows", lambda: False)
-    monkeypatch.setattr(runner, "CLAUDE_LIKELY_AT", (str(installed),))
+    monkeypatch.setattr(paths, "extra_bin_dirs", lambda: (installed.parent,))
 
     assert runner.find_claude() == str(installed)
 
@@ -453,7 +453,7 @@ def test_the_path_still_wins_when_it_has_an_answer(tmp_path, monkeypatch):
 
     monkeypatch.setattr(runner.shutil, "which", lambda name: str(theirs))
     monkeypatch.setattr(runner.paths, "is_windows", lambda: False)
-    monkeypatch.setattr(runner, "CLAUDE_LIKELY_AT", (str(ours),))
+    monkeypatch.setattr(paths, "extra_bin_dirs", lambda: (ours.parent,))
 
     assert runner.find_claude() == str(theirs)
 
@@ -468,11 +468,38 @@ def test_it_still_says_so_when_claude_really_is_not_there(tmp_path,
 
     monkeypatch.setattr(runner.shutil, "which", lambda name: None)
     monkeypatch.setattr(runner.paths, "is_windows", lambda: False)
-    monkeypatch.setattr(runner, "CLAUDE_LIKELY_AT",
-                        (str(tmp_path / "nowhere" / "claude"),))
+    monkeypatch.setattr(paths, "extra_bin_dirs",
+                        lambda: (tmp_path / "nowhere",))
 
     with _pytest.raises(runner.ClaudeNotFound):
         runner.find_claude()
+
+
+def test_the_two_lists_are_one_list(tmp_path, monkeypatch):
+    """0.48.5 shipped this as a PATH in the plist and a separate list of
+    candidates in `find_claude()`. Within the hour a scheduled run failed
+    because `bun` -- which the channel plugins run on -- was in neither.
+
+    Pinned because the failure mode is silent: nothing errors when the two
+    drift, a scheduled task just cannot find something."""
+    from aki_agent import schedule
+
+    monkeypatch.setattr(schedule.paths, "home", lambda: tmp_path)
+
+    written = schedule.launchd_plist(schedule.DEFAULT_TASKS[0],
+                                     tmp_path / "bin" / "run-task.command")
+
+    for folder in paths.extra_bin_dirs():
+        assert folder.as_posix() in written, folder
+
+
+def test_bun_is_on_the_path_so_the_channel_plugins_can_start(tmp_path,
+                                                             monkeypatch):
+    """Reported from a real Mac: the task ran, and the Telegram plugin could
+    not start because `bun` was not found."""
+    monkeypatch.setattr(paths, "home", lambda: tmp_path)
+
+    assert f"{tmp_path.as_posix()}/.bun/bin" in paths.job_path()
 
 
 def test_the_plist_carries_a_path_for_whatever_the_task_runs(tmp_path,
@@ -487,7 +514,7 @@ def test_the_plist_carries_a_path_for_whatever_the_task_runs(tmp_path,
                                      tmp_path / "bin" / "run-task.command")
 
     assert "<key>EnvironmentVariables</key>" in written
-    assert f"{tmp_path}/.local/bin" in written
+    assert f"{tmp_path.as_posix()}/.local/bin" in written
     assert "/opt/homebrew/bin" in written
     assert "/usr/bin" in written
 

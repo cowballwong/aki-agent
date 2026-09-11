@@ -456,6 +456,33 @@ not inherited from a bug fix.
 
 ---
 
+## 0.48.6 - 2026-09-12 - one list, because two of them drifted within the hour
+
+0.48.5 gave a scheduled job the directories it needs, and shipped that as two
+separate lists: a PATH written into the launchd plist, and a list of candidate
+locations inside `runner.find_claude()`.
+
+Within the hour a scheduled task ran, finished, and still delivered nothing.
+`claude` was found. `bun` was not -- the Claude Code channel plugins run on it,
+so the Telegram plugin could not start. `~/.bun/bin` was in neither list,
+because adding a directory meant remembering there were two places to add it.
+
+There is now one list, `paths.EXTRA_BIN_DIRS`, read by both. `bun`, deno and
+volta are in it alongside the original entries. Adding another is one edit.
+
+Two smaller things fell out of writing it:
+
+- The PATH is built with `as_posix()`. It is read by launchd, which is POSIX
+  by definition, while the tests for it run on Windows -- where `str(Path)`
+  produces backslashes, and the separator is already the PATH delimiter.
+- A test asserts that every directory in the shared list appears in the
+  generated plist. The drift that caused this release is silent: nothing
+  errors when the two disagree, a scheduled task simply cannot find something.
+
+2,020 tests.
+
+---
+
 ## What is still not true
 
 - **macOS is now run, but rarely.** The first real install was 2026-09-11
