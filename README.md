@@ -16,7 +16,7 @@ means in specifics:
 
 | | |
 |---|---|
-| Version | 0.47.1 |
+| Version | 0.47.2 |
 | Tests | 1,947, all passing |
 | Run on Windows | Yes, daily, by the author |
 | Run on macOS | **Never.** Not one line has knowingly executed on a Mac. The Mac code is written and reviewed; it is not observed |
@@ -335,28 +335,41 @@ administrator password.
 One line:
 
 ```
-/plugin marketplace update aki-agent
+/aki-agent:upgrade
 ```
+
+That is the whole of it. It fetches the new version, replaces the engine
+inside your own folder, re-points your launcher and your scheduled tasks at
+it, writes the launcher if you somehow have not got one, and hands Claude Code
+the new plugin.
 
 Nothing in your folder is touched — an update replaces the engine, never your
 configuration or your work.
 
-If you installed from a zip, it is the same two steps as before with the
-newer one, and then delete the download. `aki upgrade` will not install a zip
-whose signature it cannot verify; pass `--allow-unsigned` only for a build
-you made yourself.
+**Why one command and not three.** This package is two things: a Python engine
+and a Claude Code plugin. Updating used to mean refreshing the marketplace,
+then adopting the engine, then repairing what pointed at the old copy — and
+every one of those steps could succeed while the next was never run, leaving
+an install that reported itself healthy and was a version behind. Being two
+halves is the package's problem, not yours.
 
-Then run **one** more command, and it is worth understanding why:
+If you installed from a zip, the same command works; point it at the download
+if it cannot find one:
+
+```
+/aki-agent:upgrade
+```
+
+`aki upgrade` will not install a zip whose signature it cannot verify; pass
+`--allow-unsigned` only for a build you made yourself.
+
+Afterwards, **restart Claude Code** — skills are read at start-up, so until you
+do you are talking to the version you had before, which looks exactly like the
+update having done nothing. Then, if you want to see it confirmed:
 
 ```
 /aki-agent:doctor
 ```
-
-Each version installs into its own folder, and your scheduled tasks hold the
-full path to the previous one. After an update they point at a folder that is
-about to disappear — and if nothing corrects them they simply stop running one
-day, with no error, which is the worst way for software to fail. `doctor`
-notices and tells you to run `repair`, which re-points them.
 
 ## Coming from a zip install
 

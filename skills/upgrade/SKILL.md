@@ -18,16 +18,40 @@ two things is the package's problem, not the user's.
 
 So do not walk them through the pieces. Run the command.
 
+## Fetch the new version first, without asking them to
+
+Somebody who installed from the marketplace has their new version downloaded
+by Claude Code, not by them. Run both lines before anything else -- they are
+safe to run when there is nothing new, and they are the difference between
+one command and a list of steps:
+
+```bash
+claude plugin marketplace update aki-agent
+claude plugin install aki-agent@aki-agent
+```
+
+If either is not available on this machine, say so plainly and carry on: the
+engine half below still works, and a zip user never needed these at all.
+
+**Do not hand these to the person to paste.** The reason this skill exists is
+that the package is two things and the user should never have to know it. Somebody
+testing a fresh macOS install was handed three commands to type into a
+terminal and said, reasonably, that an update should resolve the problem
+rather than produce more commands. Being two halves is the package's
+problem. Run the commands.
+
 ## Do this
 
 ```bash
 python ~/.aki-agent/aki.py aki_agent.cli upgrade
 ```
 
-That reports what it found and changes nothing. Read it back to them: which
+That reports what it found and changes nothing. It looks in Claude Code's
+plugin cache as well as in Downloads, Documents and Desktop, so after the two
+lines above it finds the new version on its own. Read it back to them: which
 version they are on, which version they would move to, and where the new files
-came from. If it says it could not find a release, ask where they downloaded
-it and pass the path:
+came from. Only if it says it could not find a release do you ask where they
+downloaded it and pass the path:
 
 ```bash
 python ~/.aki-agent/aki.py aki_agent.cli upgrade --from "<path to the zip or folder>"

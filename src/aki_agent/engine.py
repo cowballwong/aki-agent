@@ -904,6 +904,60 @@ def version_of(folder: Path) -> str:
     return ""
 
 
+def plugin_cache_root() -> Path:
+    """Where Claude Code keeps the copies of plugins it has downloaded."""
+    return paths.home() / ".claude" / "plugins" / "cache"
+
+
+def newest_in_plugin_cache() -> Path | None:
+    """The newest copy of this package sitting in Claude Code's plugin cache.
+
+    THE HOLE THIS FILLS
+    --------------------
+    A marketplace install updates by downloading a new version into
+    `~/.claude/plugins/cache/<marketplace>/<plugin>/<version>/`. The search
+    for "a release to upgrade from" looked at the running copy, Downloads,
+    Documents and Desktop -- every place a *zip* lands, and not the one place
+    a *marketplace* update lands. So `upgrade` reported that it could not find
+    a release while the new release sat on the disk, and the only way through
+    was to type the full path to a cache folder, which nobody should ever have
+    to know exists.
+
+    Versions are compared as numbers, not as text: "0.47.10" is newer than
+    "0.47.9", and sorting those as strings gets it backwards.
+    """
+    root = plugin_cache_root()
+    if not root.is_dir():
+        return None
+
+    best: tuple[tuple, Path] | None = None
+    for marketplace in _folders_in(root):
+        for plugin in _folders_in(marketplace):
+            for release in _folders_in(plugin):
+                if not looks_like_the_package(release):
+                    continue
+                rank = _version_rank(version_of(release))
+                if best is None or rank > best[0]:
+                    best = (rank, release)
+    return best[1] if best else None
+
+
+def _folders_in(where: Path) -> list:
+    try:
+        return sorted(one for one in where.iterdir() if one.is_dir())
+    except OSError:                                       # pragma: no cover
+        return []
+
+
+def _version_rank(version: str) -> tuple:
+    """A version as something that sorts. Unreadable parts sort lowest."""
+    parts = []
+    for piece in (version or "").split("."):
+        digits = "".join(one for one in piece if one.isdigit())
+        parts.append(int(digits) if digits else 0)
+    return tuple(parts)
+
+
 def _default_source() -> Path | None:
     """What to upgrade from when nobody said.
 
@@ -921,7 +975,19 @@ def _default_source() -> Path | None:
 
     if not installed and looks_like_the_package(running):
         return running
-    return newest_release_nearby()
+
+    # The plugin cache before the disk. A marketplace install is the
+    # documented way in, so the place its update lands is the first place to
+    # look -- ahead of a zip in Downloads, which for that user is more likely
+    # to be an older copy they kept than the thing they just updated to.
+    from_cache = newest_in_plugin_cache()
+    if from_cache is not None:
+        newer = _version_rank(version_of(from_cache)) > _version_rank(
+            version_of(engine_dir()))
+        if newer:
+            return from_cache
+
+    return newest_release_nearby() or from_cache
 
 
 def newest_release_nearby() -> Path | None:

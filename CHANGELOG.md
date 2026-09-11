@@ -156,6 +156,33 @@ the fix removed.
 
 ---
 
+## 0.47.2 — 2026-09-11 — an update that finishes by itself
+
+0.47.1 fixed what stopped a macOS install. Repairing the machine it was found
+on then took three commands pasted into a terminal, which is its own answer to
+whether the install procedure was fixed.
+
+- **The update looked everywhere except where the update lands.** A
+  marketplace install downloads its new version into Claude Code's plugin
+  cache. The search for "a release to upgrade from" covered the running copy,
+  Downloads, Documents and Desktop — every place a *zip* arrives, and not that
+  one. It now looks there first, and compares versions as numbers so 0.47.10
+  is newer than 0.47.9.
+- **The upgrade skill fetches the new version itself** rather than asking the
+  person to refresh the marketplace by hand first.
+- **Repair writes a launcher that was never created.** It used to rewrite one
+  only if the file already existed, so an install whose setup stopped early
+  could be repaired, upgraded and health-checked for ever without ever
+  producing the file to double-click — each step reporting success, because
+  each step it knew about had succeeded.
+
+Updating is now `/aki-agent:upgrade`, and that is the whole of it. Being two
+halves — a Python engine and a Claude Code plugin — is the package's problem,
+not the user's, and every step of the old path could succeed while the next
+one was simply never run.
+
+---
+
 ## 0.47.1 — 2026-09-11 — the first real macOS install
 
 The changelog said macOS had been written, reviewed and never run. It was run.

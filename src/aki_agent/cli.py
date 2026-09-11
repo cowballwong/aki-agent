@@ -2034,7 +2034,40 @@ def _repoint(root: "Path | None" = None) -> int:
         schedule.remember_install_root(root)
 
     launcher_file = launcher.launcher_path()
-    if launcher_file.exists():
+
+    # A launcher that is not there is written, not skipped.
+    #
+    # This used to be `if launcher_file.exists():` and nothing else, so an
+    # install whose setup stopped before its last step could be repaired,
+    # upgraded and health-checked for ever without anybody producing the file
+    # the person is supposed to double-click. Repair reported success each
+    # time, because every step it knew about had in fact succeeded.
+    if not launcher_file.exists():
+        loaded, _ = _load_config()
+        options = launcher.LauncherOptions(
+            workspace=(loaded.layout.root
+                       if loaded is not None and loaded.layout.root
+                       else None),
+            title=(loaded.assistant.name if loaded is not None
+                   else "Assistant"),
+            # The dashboard is how most people ever see this, and somebody
+            # who has no launcher at all has expressed no preference to
+            # preserve. `make-launcher` without `--dashboard` remains the way
+            # to say no.
+            open_dashboard=True,
+            channel_server=(telegram_setup.CHANNEL_SERVER
+                            if telegram_setup.status().plugin_installed
+                            else ""),
+        )
+        ok, message = launcher.write_launcher(options, root, confirmed=True)
+        print(f"  {'ok' if ok else 'FAILED'} — launcher created: {message}")
+        failed += 0 if ok else 1
+
+    # `elif`, not a second `if`. Written as two independent conditions, the
+    # branch below read back the file the branch above had just created and
+    # rewrote it from that -- a launcher built twice in one repair, the second
+    # time from a guess about the first.
+    elif launcher_file.exists():
         loaded, _ = _load_config()
         # Preserved from the existing file rather than guessed: rewriting
         # someone's launcher must not quietly change what it does.
