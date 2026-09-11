@@ -26,7 +26,11 @@
 
 {% set grouped = space.by_workspace() %}
 
-{% if not space.items %}
+{# `grouped` now carries every configured workspace, empty ones included, so
+   the test below is the same question the heading asks -- it used to count
+   only workspaces that happened to hold a project. A brand new workspace is
+   empty, which made the one just created the one that vanished. #}
+{% if not space.items and grouped|length <= 1 %}
   <p class="empty">Nothing to show yet.</p>
 
 {% elif grouped|length > 1 %}

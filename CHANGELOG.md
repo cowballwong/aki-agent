@@ -373,6 +373,45 @@ the plan is built against the folder that gets announced.
 
 ---
 
+## 0.48.4 - 2026-09-11 - the workspace nobody could see
+
+Reported from a macOS install with two workspaces on disk, `01_Work` and
+`02_Family`, one of them still empty. The front page came up titled
+"Workspaces" and listed projects. `02_Family` was on no card, in no list, and
+reachable from nowhere in the dashboard.
+
+`Scan.by_workspace()` built its groups from the items it had read, so a
+workspace holding no projects produced no group and did not exist as far as
+anything downstream could tell. A workspace somebody has just created is empty
+by definition, which means the workspace they most recently made was always
+the one that could not be seen.
+
+The missing card was the smaller half. The front page decides whether it is
+the list of workspaces or the list of projects by counting those groups, while
+the heading beside it counts the workspaces in the config. Two sources for one
+question, disagreeing exactly when one workspace is empty -- hence a page
+titled with one thing and filled with the other.
+
+- `Scan` now carries the workspaces the config declares and the schema each
+  reads with, and `by_workspace()` returns a group for every one of them,
+  ordered by the config. An empty workspace keeps its own schema, because
+  there are no items to infer one from and another workspace's would draw the
+  wrong columns the moment somebody put a project in it.
+- The page's "am I a list of workspaces?" test is now the same question the
+  heading asks.
+- The Today picker skips the empty groups. An empty workspace belongs on the
+  workspace list, where it can be opened and filled; it does not belong in a
+  picker of projects as a heading with nothing under it.
+
+2,013 tests, four of them checked red against the code with the fix removed.
+One of those four went in asserting that a folder the config does not list
+would be shown, which is not what this package does -- `item_dirs()` walks the
+configured workspaces and an unlisted folder surfaces through "Refresh from
+folders" instead. It now pins the real behaviour, so that ordering from the
+config is never quietly turned into filtering by it.
+
+---
+
 ## What is still not true
 
 - **macOS is now run, but rarely.** The first real install was 2026-09-11

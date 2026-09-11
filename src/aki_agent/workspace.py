@@ -120,6 +120,12 @@ class Scan:
     items: list[Item] = dataclass_field(default_factory=list)
     problems: list[str] = dataclass_field(default_factory=list)
     scanned_at: _dt.datetime | None = None
+    # The workspaces the CONFIG declares, and the schema each one reads with.
+    # Carried separately from the items because a workspace with nothing in it
+    # yet has no items to be inferred from, and is still a workspace. See the
+    # note on `by_workspace()`.
+    workspaces: tuple[str, ...] = ()
+    workspace_schemas: dict = dataclass_field(default_factory=dict)
 
     @property
     def is_empty(self) -> bool:
@@ -136,14 +142,40 @@ class Scan:
 
         With no workspaces configured there is exactly one group, named "", and
         everything behaves as it did.
+
+        EVERY CONFIGURED WORKSPACE, INCLUDING THE EMPTY ONES (2026-09-11)
+        -----------------------------------------------------------------
+        This used to build its groups purely from the items, so a workspace
+        holding no projects yet produced no group and did not exist as far as
+        anything downstream could tell.
+
+        That is not a missing card, it is a missing LEVEL. The front page
+        decides whether it is the list of workspaces or the list of projects
+        by counting these groups, while the heading beside it counts the
+        workspaces in the config -- two sources for one question. Somebody
+        with `01_Work` and `02_Family`, having filled in only one of them,
+        got a page titled "Workspaces" listing projects, with `02_Family`
+        nowhere on it and no way to reach it.
+
+        A freshly created workspace is empty by definition, so the workspace
+        somebody just made was always the one that could not be seen.
         """
-        order: list[str] = []
+        order: list[str] = [name for name in self.workspaces]
         grouped: dict[str, list[Item]] = {}
         for item in self.items:
             grouped.setdefault(item.workspace, []).append(item)
+            # A folder on disk that the config does not list is still real and
+            # still holds the person's work. Shown after the configured ones.
             if item.workspace not in order:
                 order.append(item.workspace)
-        return [(workspace, grouped[workspace][0].schema, grouped[workspace])
+
+        def schema_for(workspace: str) -> ItemSchema:
+            items = grouped.get(workspace)
+            if items:
+                return items[0].schema
+            return self.workspace_schemas.get(workspace, self.schema)
+
+        return [(workspace, schema_for(workspace), grouped.get(workspace, []))
                 for workspace in order]
 
     def item_by_key(self, key: str) -> Item | None:
@@ -303,7 +335,10 @@ def scan(config: Config) -> Scan:
         )
 
     return Scan(root=root, schema=schema, items=items,
-                     problems=problems, scanned_at=_dt.datetime.now())
+                     problems=problems, scanned_at=_dt.datetime.now(),
+                     workspaces=tuple(config.layout.workspaces),
+                     workspace_schemas={name: config.layout.schema_for(name)
+                                        for name in config.layout.workspaces})
 
 
 # ---------------------------------------------------------------------------

@@ -678,6 +678,12 @@ def create_app(config_path: Path | None = None) -> Flask:
         groups = []
         try:
             for name, _schema, items in space.by_workspace():
+                # An empty workspace belongs on the workspace list, where it
+                # can be opened and filled. It does not belong in a picker of
+                # projects to put on Today, where it would be a heading with
+                # nothing under it.
+                if not items:
+                    continue
                 groups.append({
                     "name": name,
                     # `projects`, NOT `items`. Jinja resolves `group.items` to

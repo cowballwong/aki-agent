@@ -341,3 +341,83 @@ def test_the_shipped_two_trades_example_actually_works():
     pupil = next(item for item in space.items if item.workspace == "02_Personal")
     assert pupil.values["instrument"].display == "Piano"
     assert "stage" not in pupil.values
+
+
+# ---------------------------------------------------------------------------
+# An empty workspace is still a workspace
+#
+# Reported from a macOS install, 2026-09-11: `03_Workspace` held `01_Work` and
+# `02_Family`, only one of them had a project in it, and the front page came up
+# titled "Workspaces" while listing projects. `02_Family` appeared nowhere and
+# could not be opened. The groups were built from the items, so a workspace
+# with no items did not exist -- and a workspace somebody has just created is
+# empty by definition.
+
+
+def _one_project_two_workspaces(tmp_path):
+    root = tmp_path / "03_Workspace"
+    (root / "01_Work" / "01_Project-1").mkdir(parents=True)
+    (root / "01_Work" / "01_Project-1" / "brief.md").write_text(
+        "# A project\n", encoding="utf-8")
+    (root / "02_Family").mkdir(parents=True)
+
+    config = Config()
+    config.layout = Layout(root=root, workspaces=("01_Work", "02_Family"))
+    return config
+
+
+def test_a_workspace_with_nothing_in_it_is_still_listed(tmp_path):
+    config = _one_project_two_workspaces(tmp_path)
+
+    space = workspace_module.scan(config)
+    names = [name for name, _schema, _items in space.by_workspace()]
+
+    assert names == ["01_Work", "02_Family"]
+
+
+def test_the_page_still_knows_it_is_a_list_of_workspaces(tmp_path):
+    """The front page decides "am I the workspace list or the project list?"
+    by counting these groups, and the heading counts the config. Two sources
+    for one question is how the title said Workspaces over a list of
+    projects."""
+    config = _one_project_two_workspaces(tmp_path)
+
+    space = workspace_module.scan(config)
+
+    assert len(space.by_workspace()) == len(config.layout.workspaces)
+
+
+def test_the_empty_one_carries_its_own_schema(tmp_path):
+    """With no items there is nothing to infer a schema from, and falling back
+    to another workspace's would draw the wrong columns the moment somebody
+    put their first project in it."""
+    config = _one_project_two_workspaces(tmp_path)
+
+    space = workspace_module.scan(config)
+    schemas = {name: schema for name, schema, _ in space.by_workspace()}
+
+    assert schemas["02_Family"] is not None
+    assert schemas["02_Family"].item_label == \
+        config.layout.schema_for("02_Family").item_label
+
+
+def test_the_config_is_the_list_and_a_stray_folder_does_not_join_it(tmp_path):
+    """Checked rather than assumed, because the obvious guess is wrong: a
+    folder the config does not list is not scanned at all. `item_dirs()`
+    walks the configured workspaces, and an unlisted folder surfaces through
+    `unmatched_workspaces()` and the "Refresh from folders" button -- the
+    place where the person decides whether it is theirs.
+
+    Pinned here because `by_workspace()` now orders from the config, and the
+    reading that ordering means filtering would be a real regression if the
+    scan ever started picking folders up on its own."""
+    config = _one_project_two_workspaces(tmp_path)
+    stray = config.layout.root / "03_Music" / "01_Pupil"
+    stray.mkdir(parents=True)
+    (stray / "brief.md").write_text("# A pupil\n", encoding="utf-8")
+
+    space = workspace_module.scan(config)
+    names = [name for name, _schema, _items in space.by_workspace()]
+
+    assert names == ["01_Work", "02_Family"]
+    assert all(item.workspace in names for item in space.items)
