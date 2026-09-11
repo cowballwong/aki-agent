@@ -50,8 +50,30 @@ That reports what it found and changes nothing. It looks in Claude Code's
 plugin cache as well as in Downloads, Documents and Desktop, so after the two
 lines above it finds the new version on its own. Read it back to them: which
 version they are on, which version they would move to, and where the new files
-came from. Only if it says it could not find a release do you ask where they
-downloaded it and pass the path:
+came from.
+
+### If it says it could not find a release
+
+**Do not ask them where it is yet.** The upgrade that runs is the one already
+installed, so an engine older than 0.47.2 is searching with a version of the
+search that never knew about the plugin cache — and it will say it found
+nothing while the new release sits in that cache. This is the one hop the
+package cannot make on its own, and the skill carries it rather than the
+person:
+
+```bash
+ls -d ~/.claude/plugins/cache/*/aki-agent/*
+```
+
+Pick the highest version number in that list — compare the numbers, not the
+text, so 0.47.10 beats 0.47.9 — and hand it over:
+
+```bash
+python ~/.aki-agent/aki.py aki_agent.cli upgrade --from "<that folder>" --yes
+```
+
+Only when there is no such folder at all is this a zip install, and only then
+do you ask where they downloaded it:
 
 ```bash
 python ~/.aki-agent/aki.py aki_agent.cli upgrade --from "<path to the zip or folder>"
