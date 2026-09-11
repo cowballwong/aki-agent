@@ -1055,6 +1055,23 @@ def windows_delete_command(task: ScheduledTask) -> list[str]:
 # macOS — launchd
 # ---------------------------------------------------------------------------
 
+def _launchd_is_loaded(label: str) -> bool:
+    """Is launchd already holding this job? False when it cannot be asked.
+
+    False is the safe answer: it means "carry on and register it", which is
+    what the caller did unconditionally before this existed. A wrong False
+    costs one redundant notification; a wrong True would leave a task the user
+    thinks is scheduled and is not.
+    """
+    try:
+        result = subprocess.run(["launchctl", "list", label],
+                                capture_output=True, text=True,
+                                timeout=30, check=False)
+    except (OSError, subprocess.SubprocessError):         # pragma: no cover
+        return False
+    return result.returncode == 0
+
+
 def launchd_plist_path(task: ScheduledTask) -> Path:
     """User-scope LaunchAgents, never the machine-wide LaunchDaemons."""
     return paths.home() / "Library" / "LaunchAgents" / f"{task.label}.plist"
@@ -1372,8 +1389,31 @@ def _install(task: ScheduledTask, runner: Path,
     if paths.is_macos():
         from . import atomic
         path = launchd_plist_path(task)
+        wanted = launchd_plist(task, runner)
+
+        # Nothing to do, and saying so is the feature.
+        #
+        # WHY A NO-OP IS WORTH CODE HERE
+        # ------------------------------
+        # macOS posts a "Background Items Added" notification every time a
+        # LaunchAgent is loaded. `_repoint` reinstalls every enabled task, and
+        # `repair` and `upgrade` both call it -- so a single update threw
+        # one notification per task at the user, over and over, for jobs
+        # already registered with the identical definition.
+        #
+        # The notification cannot be suppressed; it is a macOS security
+        # feature and should stay one. What can be removed is the pointless
+        # re-registration that triggers it. An install that changes nothing
+        # now touches nothing.
+        if path.exists() and _launchd_is_loaded(task.label):
+            try:
+                if path.read_text(encoding="utf-8") == wanted:
+                    return True, f"'{task.title}' was already scheduled"
+            except OSError:                               # pragma: no cover
+                pass
+
         try:
-            atomic.write_text(path, launchd_plist(task, runner))
+            atomic.write_text(path, wanted)
         except OSError as exc:
             return False, f"could not write {path}: {exc}"
 

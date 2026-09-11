@@ -1,7 +1,7 @@
 {
   "name": "aki-agent",
   "description": "A general-purpose personal assistant you install on your own machine. Answer a few questions and it configures itself around your work \u2014 no API key, no server, no Docker. Runs on your own Claude subscription.",
-  "version": "0.47.2",
+  "version": "0.47.3",
   "author": {
     "name": "Anzon Wong"
   },

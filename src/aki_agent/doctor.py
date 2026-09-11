@@ -778,6 +778,63 @@ def check_launcher() -> Check:
     return Check("The file you double-click", True, detail=detail)
 
 
+def check_scheduling_can_reach_the_workspace(loaded) -> Check:
+    """On macOS, can a scheduled task actually read the workspace?
+
+    THE FAILURE (2026-09-11)
+    -------------------------
+    A one-off job fired exactly on time and died with exit 126: macOS would
+    not let a process started by launchd read a script inside `Documents`.
+    Not a bug in the job, the schedule or the script -- TCC, doing its job,
+    to a process with no Full Disk Access.
+
+    Which means a workspace in `Documents`, `Desktop` or `Downloads` gives
+    somebody scheduled tasks that install cleanly, report success, and then
+    fail every time they run, for ever, saying nothing. `doctor` is the only
+    place that can say this before the user finds out by noticing that their
+    morning summary never came.
+
+    A warning, not a failure: everything they do by hand still works, and the
+    two ways out are theirs to choose between.
+    """
+    from . import paths, schedule
+
+    if not paths.is_macos():
+        return Check("Scheduled work can reach your files", True,
+                     detail="not a macOS machine")
+
+    root = getattr(getattr(loaded, "layout", None), "root", "") if loaded else ""
+    if not root:
+        return Check("Scheduled work can reach your files", True,
+                     detail="no workspace is configured yet")
+
+    guarded = paths.inside_a_protected_folder(root)
+    if not guarded:
+        return Check("Scheduled work can reach your files", True,
+                     detail=f"{root} is not a folder macOS restricts")
+
+    try:
+        installed = bool(schedule.installed_names())
+    except Exception:                                     # noqa: BLE001
+        installed = True
+
+    detail = (f"your workspace is inside {guarded}, and macOS does not let "
+              "anything started by a scheduler read that folder. Tasks will "
+              "install, report success, and then fail every time they run.")
+    if not installed:
+        detail += " Nothing is scheduled yet, so nothing is failing today."
+
+    return Check(
+        "Scheduled work can reach your files", False, warning_only=True,
+        detail=detail,
+        fix=("Either move your workspace somewhere macOS does not restrict "
+             "-- anywhere in your home folder that is not Documents, Desktop "
+             "or Downloads -- or grant Full Disk Access to the program that "
+             "runs your tasks, in System Settings > Privacy & Security > "
+             "Full Disk Access. Moving the folder is the smaller of the "
+             "two."))
+
+
 def check_no_stray_engines() -> Check:
     """Numbered engine folders beside the real one.
 
@@ -1019,6 +1076,7 @@ def run_all() -> list[Check]:
     checks.append(check_session_is_current())
     checks.append(check_credential_store_reachable())
     checks.append(check_launcher())
+    checks.append(check_scheduling_can_reach_the_workspace(loaded))
     checks.append(check_no_stray_engines())
     checks.append(check_scheduled_tasks_are_working())
     checks.append(check_nothing_was_set_aside())

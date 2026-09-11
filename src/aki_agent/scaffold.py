@@ -1074,8 +1074,20 @@ def suggest_root() -> Path:
     if stores:
         return stores[0].path / "Workspace"
 
+    # Not Documents, on a Mac.
+    #
+    # Documents is where anybody would put this, and on macOS it is the one
+    # place that silently breaks the half of the package that runs by itself:
+    # launchd's children have no Full Disk Access, so every scheduled task is
+    # created, reports success, and then fails at every firing with a
+    # permission error nobody sees. Somewhere plainer in the home folder costs
+    # a little familiarity and buys scheduling that works.
+    #
+    # This only moves the SUGGESTION. Anybody who wants Documents can still
+    # say so, and `doctor` explains what it will cost them rather than
+    # refusing.
     documents = paths.home() / "Documents"
-    if documents.exists():
+    if documents.exists() and not paths.is_macos():
         return documents / "Workspace"
 
     return paths.home() / "Workspace"

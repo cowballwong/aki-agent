@@ -156,6 +156,29 @@ the fix removed.
 
 ---
 
+## 0.47.3 — 2026-09-11 — two things macOS does that nothing here knew about
+
+Both found by running the scheduler on a real Mac for an evening, which is
+longer than it had ever run before.
+
+- **A scheduled task could not read the workspace, and said nothing.** A job
+  fired exactly on time and died with exit 126: macOS does not let anything
+  started by launchd read `Documents`, `Desktop` or `Downloads`, and setup
+  used to suggest `~/Documents/Workspace`. So every scheduled task installed
+  cleanly, reported success, and would then have failed at every firing for as
+  long as it existed. Setup no longer suggests that folder on a Mac, and the
+  health check says plainly what it costs anybody who chose it anyway — with
+  the two ways out, rather than a refusal.
+- **Updating threw a notification per task, every time.** macOS posts
+  "Background Items Added" whenever a LaunchAgent is loaded, and repair and
+  upgrade both re-registered every task unconditionally, including jobs whose
+  definition had not changed by a character. The notification is macOS telling
+  somebody that software has arranged to run itself and should stay exactly
+  that; what was wrong was doing the thing that triggers it for no reason. An
+  install that changes nothing now touches nothing.
+
+---
+
 ## 0.47.2 — 2026-09-11 — an update that finishes by itself
 
 0.47.1 fixed what stopped a macOS install. Repairing the machine it was found

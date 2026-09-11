@@ -329,3 +329,42 @@ def describe_environment() -> dict:
         # os.name is 'nt' or 'posix' -- useful when a report looks odd.
         "os_name": os.name,
     }
+
+
+# The folders macOS guards with TCC (Transparency, Consent and Control).
+#
+# A process started by launchd has no Full Disk Access, so reading anything
+# inside these fails -- a shell script in one is not even executable, which
+# surfaces as exit 126 and the word "Operation not permitted" if anybody is
+# watching, and as nothing at all if nobody is.
+PROTECTED_ON_MACOS = ("Documents", "Desktop", "Downloads")
+
+
+def inside_a_protected_folder(target: "Path | str") -> str:
+    """The protected folder `target` sits in, or "" -- macOS only.
+
+    WHY THIS IS NOT A DETAIL (2026-09-11)
+    --------------------------------------
+    A scheduled task on macOS runs under launchd, and launchd's children get
+    no Full Disk Access. Put somebody's workspace in `~/Documents` -- which
+    `suggest_root` did, and which is where anybody would put it -- and every
+    scheduled task is created successfully, reports success, and then fails
+    at every single firing for as long as it exists.
+
+    That is the exact failure this package keeps writing notes about: not a
+    mechanism that is wrong, but one that reports success and does nothing.
+    It was found when a one-off job fired on time and died with exit 126
+    because `/bin/bash` was not allowed to read a script in `Documents`.
+    """
+    if not is_macos():
+        return ""
+    try:
+        resolved = Path(target).expanduser().resolve()
+        base = home().resolve()
+    except OSError:                                       # pragma: no cover
+        return ""
+    for name in PROTECTED_ON_MACOS:
+        guarded = base / name
+        if resolved == guarded or guarded in resolved.parents:
+            return name
+    return ""
