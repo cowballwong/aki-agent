@@ -313,6 +313,34 @@ problem needs, and dropped again on the next major macOS update.
 
 ---
 
+## 0.48.2 - 2026-09-11 - the repository was not an update route
+
+0.48.1 was pushed to the public repository, and the machine that needed it
+could not see it. Not a network problem: `refresh_plugin` re-added the
+marketplace after every upgrade pointing at the engine folder inside the
+user's own workspace. That is a `directory` source, so
+`claude plugin marketplace update aki-agent` -- the one command anybody would
+try, and the one this package's own upgrade skill ran first -- re-read the
+machine it was already on, found exactly what was already installed, and
+reported success.
+
+So every release had to travel as a zip sent by hand, and the published
+repository was somewhere to read the code rather than somewhere to get it.
+The same shape as the entry above, one layer out: the mechanism worked, and
+nothing reached it.
+
+- The marketplace now points at the repository after an upgrade. The local
+  folder remains the fallback, taken when adding the remote fails, which is
+  what no network or a private copy looks like from here. The upgrade still
+  finishes; it just says that the next one will need a file.
+- The upgrade skill removes and re-adds the marketplace instead of calling
+  `marketplace update`. Any machine upgraded before this release is still
+  pointing at itself, and `update` cannot move it.
+
+2,004 tests.
+
+---
+
 ## What is still not true
 
 - **macOS is now run, but rarely.** The first real install was 2026-09-11

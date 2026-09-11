@@ -135,6 +135,9 @@ def private_terms() -> list[str]:
             and line.strip().lower() not in ("anzon", "wong")]
 
 
+PUBLISHED_AT = "cowballwong/aki-agent"
+
+
 def test_no_private_names_are_used_as_sample_data():
     """They creep in as the nearest realistic example to hand.
 
@@ -161,6 +164,13 @@ def test_no_private_names_are_used_as_sample_data():
                 text = path.read_text(encoding="utf-8")
             except (OSError, UnicodeDecodeError):         # pragma: no cover
                 continue
+            # The repository slug is an address, not sample data. A package
+            # that can be updated has to name where updates come from, and
+            # that name contains the author's handle -- the same exception
+            # the plugin manifest's author field already gets. Removed before
+            # the scan rather than allow-listed, so the handle used anywhere
+            # other than the slug still fails this test.
+            text = text.replace(PUBLISHED_AT, "")
             for name in family:
                 if re.search(rf"\b{re.escape(name)}\b", text, re.IGNORECASE):
                     found.append(f"{path.relative_to(repo())}: {name}")

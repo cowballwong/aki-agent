@@ -1163,6 +1163,26 @@ def _if_trusted(unpacked: Path, source: Path,
 MARKETPLACE_NAME = "aki-agent"
 PLUGIN_ID = "aki-agent@aki-agent"
 
+# Where a new release comes FROM, as opposed to where this copy happens to sit.
+#
+# WHY A REMOTE AND NOT THE FOLDER WE JUST INSTALLED (2026-09-11)
+# --------------------------------------------------------------
+# `refresh_plugin` used to re-add the marketplace pointing at the engine
+# folder inside the user's own workspace. That is a `directory` source, so
+# `claude plugin marketplace update aki-agent` re-read the machine it was
+# already on, found exactly what was already installed, and reported success.
+#
+# Which means the published repository was not an update route at all. Every
+# release had to reach people as a zip somebody sent them by hand, and the
+# one command a user would reasonably try -- the one Claude Code itself
+# documents -- could never bring anything new down. A mechanism that works
+# and that nothing reaches, again.
+#
+# Pointing at the repository makes `marketplace update` mean what it says.
+# The local folder stays as the fallback for an install with no network and
+# for anyone running a private copy, which is what `add` failing indicates.
+MARKETPLACE_SOURCE = "cowballwong/aki-agent"
+
 
 def _claude(arguments: list[str]) -> tuple[bool, str]:
     """Run one `claude` sub-command, resolved properly.
@@ -1205,9 +1225,22 @@ def refresh_plugin(engine_folder: Path) -> list[str]:
     lines.append(f"  {'ok' if ok else 'note'} - old marketplace entry: "
                  f"{message or 'removed'}")
 
-    ok, message = _claude(["plugin", "marketplace", "add", str(engine_folder)])
-    lines.append(f"  {'ok' if ok else 'FAILED'} - marketplace now points at "
-                 f"{engine_folder}")
+    # The repository first, the local folder only if that cannot be reached.
+    # See the note on `MARKETPLACE_SOURCE`: pointing this at the folder we
+    # just wrote is what made `marketplace update` a no-op that reported
+    # success, and left zips as the only way a release ever travelled.
+    ok, message = _claude(["plugin", "marketplace", "add", MARKETPLACE_SOURCE])
+    if ok:
+        lines.append(f"  ok - marketplace now points at {MARKETPLACE_SOURCE}, "
+                     "so future updates arrive on their own")
+    else:
+        lines.append(f"  note - could not reach {MARKETPLACE_SOURCE} "
+                     f"({message}); using the local folder instead, which "
+                     "means the next update has to be a file you fetch")
+        ok, message = _claude(["plugin", "marketplace", "add",
+                               str(engine_folder)])
+        lines.append(f"  {'ok' if ok else 'FAILED'} - marketplace now points "
+                     f"at {engine_folder}")
     if not ok:
         lines.append(f"       {message}")
         return lines

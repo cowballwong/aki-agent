@@ -25,7 +25,7 @@
 # `aki_agent`; the per-user folder is `.aki-agent`, set by
 # APP_DIR_NAME in src/aki_agent/paths.py. All three agree on purpose.
 name = "aki-agent"
-version = "0.48.1"
+version = "0.48.2"
 description = "A general-purpose personal AI agent you install on your own machine."
 requires-python = ">=3.10"
 license = { text = "MIT" }

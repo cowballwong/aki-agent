@@ -291,10 +291,16 @@ def test_the_newest_download_is_the_one_offered(tmp_path, monkeypatch):
     assert engine.newest_release_nearby() == newer
 
 
-def test_the_plugin_half_repoints_at_the_adopted_engine(monkeypatch, tmp_path):
+def test_the_plugin_half_repoints_at_the_repository(monkeypatch, tmp_path):
     """`marketplace update` would re-read the OLD path -- the folder being
     replaced -- and faithfully reinstall the version being upgraded away
-    from. So the entry is removed and added, in that order."""
+    from. So the entry is removed and added, in that order.
+
+    Added, now, pointing at the repository. It used to be re-added pointing at
+    the freshly adopted folder, which is a `directory` source: from then on
+    `marketplace update` re-read the machine it was already on, found what was
+    already installed, and reported success. Releases could only travel as
+    zips somebody sent by hand."""
     calls = []
 
     def fake(arguments):
@@ -308,8 +314,31 @@ def test_the_plugin_half_repoints_at_the_adopted_engine(monkeypatch, tmp_path):
 
     assert calls[0][:3] == ["plugin", "marketplace", "remove"]
     assert calls[1][:3] == ["plugin", "marketplace", "add"]
-    assert calls[1][3] == str(adopted)
+    assert calls[1][3] == engine.MARKETPLACE_SOURCE
+    assert str(adopted) not in calls[1], "the local folder is the fallback"
     assert calls[2][:2] == ["plugin", "install"]
+
+
+def test_an_unreachable_repository_falls_back_to_the_local_folder(monkeypatch,
+                                                                  tmp_path):
+    """No network, or a private copy of this package. The upgrade must still
+    finish -- it just cannot promise that the next one arrives on its own."""
+    calls = []
+
+    def fake(arguments):
+        calls.append(arguments)
+        reaching_out = arguments[-1] == engine.MARKETPLACE_SOURCE
+        return (not reaching_out), ("offline" if reaching_out else "")
+
+    monkeypatch.setattr(engine, "_claude", fake)
+    adopted = tmp_path / "01_Config" / "engine"
+
+    lines = engine.refresh_plugin(adopted)
+
+    assert calls[1][3] == engine.MARKETPLACE_SOURCE
+    assert calls[2][3] == str(adopted)
+    assert calls[3][:2] == ["plugin", "install"]
+    assert any("has to be a file you fetch" in line for line in lines), lines
 
 
 def test_a_failed_marketplace_add_does_not_go_on_to_install(monkeypatch,

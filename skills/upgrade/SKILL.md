@@ -21,14 +21,23 @@ So do not walk them through the pieces. Run the command.
 ## Fetch the new version first, without asking them to
 
 Somebody who installed from the marketplace has their new version downloaded
-by Claude Code, not by them. Run both lines before anything else -- they are
-safe to run when there is nothing new, and they are the difference between
+by Claude Code, not by them. Run all three lines before anything else -- they
+are safe to run when there is nothing new, and they are the difference between
 one command and a list of steps:
 
 ```bash
-claude plugin marketplace update aki-agent
+claude plugin marketplace remove aki-agent
+claude plugin marketplace add cowballwong/aki-agent
 claude plugin install aki-agent@aki-agent
 ```
+
+**Remove and re-add, not `marketplace update`.** An upgrade before 0.48.2
+re-pointed the marketplace at the engine folder inside the person's own
+workspace. That is a `directory` source, so `marketplace update` re-read the
+machine it was already on, found what was already installed, and said
+success. On a machine that has ever been upgraded, `update` alone can never
+bring a new version down -- only re-adding the repository changes that, and
+it is harmless on a machine already pointing there.
 
 If either is not available on this machine, say so plainly and carry on: the
 engine half below still works, and a zip user never needed these at all. If
