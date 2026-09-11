@@ -447,6 +447,41 @@ def cmd_scaffold(args) -> int:
     if adopting:
         config.layout.root = root
 
+    # Moved, not warned about.
+    #
+    # WHY THE FOLDER IS CHANGED AND NOT QUESTIONED (2026-09-11)
+    # ---------------------------------------------------------
+    # `default_root()` is the folder Claude Code was started in, and people
+    # start terminals in `Documents`. On macOS that one choice silently
+    # disables every scheduled task forever: launchd's children have no Full
+    # Disk Access, so each task installs, reports success, and then fails at
+    # every firing. One machine ran seven dead tasks for days with no symptom
+    # until somebody went looking.
+    #
+    # 0.48.1 printed a note here and installed anyway. That was still a
+    # broken install, with a sentence in front of it -- and the sentence
+    # scrolls past during a setup nobody reads twice.
+    #
+    # This does not reintroduce the question that `default_root()` exists to
+    # avoid (see its note: two of the first three installs failed because the
+    # answer and the folders on disk disagreed). Nothing is asked. The folder
+    # is chosen, written down in the same breath, and said out loud -- so the
+    # config and the disk still cannot disagree.
+    #
+    # Above `scaffold.plan()`, which is the whole point: the plan, the folders
+    # it creates and the sentence printed about them all have to name the same
+    # place.
+    #
+    # An explicit `--root` is a decision somebody made and is honoured; only
+    # the implicit default, which nobody chose, is moved.
+    moved_from = None
+    if adopting and not args.root:
+        guarded = paths_module.inside_a_protected_folder(root)
+        if guarded:
+            moved_from = (root, guarded)
+            root = paths_module.home() / "Aki-Agent"
+            config.layout.root = root
+
     if args.workspaces:
         workspaces = tuple(part.strip() for part in args.workspaces.split(",")
                       if part.strip())
@@ -458,40 +493,25 @@ def cmd_scaffold(args) -> int:
                              with_examples=not args.no_examples)
 
     if adopting:
-        print(f"Installing here: {root}")
-
-        # Said at the moment the folder is chosen, not months later.
-        #
-        # WHY THIS IS PRINTED AND NOT SWALLOWED (a test Mac, 2026-09-11)
-        # --------------------------------------------------------------
-        # `default_root()` is the folder Claude Code was started in, and
-        # people start terminals in `Documents`. On macOS that one choice
-        # silently disables every scheduled task forever: launchd's children
-        # have no Full Disk Access, so each task installs, reports success,
-        # and then fails at every firing. That machine ran with seven dead
-        # tasks and no symptom until somebody went looking.
-        #
-        # `suggest_root()` already steers away from Documents, but it only
-        # gets a vote when nobody has opened a terminal somewhere else, which
-        # is not the common path. `doctor` explains it afterwards, which is
-        # too late to change the decision. This is the one place that sees
-        # the folder while it is still a choice.
-        #
-        # A warning, not a refusal: the interactive half of the assistant
-        # works perfectly well in Documents, and it is their machine. The
-        # refusal lives in `schedule.install()`, where the thing that would
-        # actually break is created.
-        guarded = paths_module.inside_a_protected_folder(root)
-        if guarded:
+        if moved_from:
+            came_from, guarded = moved_from
+            print(f"Not installing in {came_from}.")
             print()
-            print(f"  Note: this is inside {guarded}, which macOS does not "
-                  "let scheduled")
-            print("  tasks read. Everything you do here by hand works "
-                  "normally, but")
-            print("  nothing can be scheduled to run on its own until the "
-                  "folder moves")
-            print("  somewhere else in your home folder. Run `doctor` for "
-                  "the detail.")
+            print(f"  That is inside {guarded}, and macOS does not let "
+                  "anything started by a")
+            print("  scheduler read it. Everything you did by hand would "
+                  "work, and every")
+            print("  task that runs on its own -- the morning summary, the "
+                  "evening wrap-up")
+            print("  -- would install, report success and then fail every "
+                  "time, silently.")
+            print()
+        print(f"Installing here: {root}")
+        if moved_from:
+            print()
+            print("  Open Claude Code in that folder from now on, or use the "
+                  "launcher,")
+            print("  which opens it for you.")
         print()
     print(the_plan.describe())
 

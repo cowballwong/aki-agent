@@ -302,7 +302,8 @@ Three changes, in the order they matter:
 - **Install says so while it is still a choice.** `default_root()` is the
   folder Claude Code was started in, and people start terminals in
   `Documents`. `suggest_root()` already steered away, but it only gets a vote
-  when nobody opened a terminal somewhere else.
+  when nobody opened a terminal somewhere else. (Superseded by 0.48.3, which
+  moves the folder rather than printing a note about it.)
 
 Full Disk Access is the other way out and is not recommended anywhere in this
 release. The runner is a bash script, TCC grants to the interpreter, so the
@@ -338,6 +339,37 @@ nothing reached it.
   pointing at itself, and `update` cannot move it.
 
 2,004 tests.
+
+---
+
+## 0.48.3 - 2026-09-11 - not installing there in the first place
+
+0.48.1 printed a note when the folder somebody was installing into was one
+macOS restricts, and then installed there anyway. Asked why the install could
+not simply avoid `Documents`, there was no good answer: a note in front of a
+broken install is still a broken install, and the note scrolls past during a
+setup nobody reads twice.
+
+A first install with no explicit `--root` that lands in `Documents`, `Desktop`
+or `Downloads` on macOS now goes to `~/Aki-Agent` instead. It says which
+folder it refused, why, where it went, and that Claude Code should be opened
+there from now on.
+
+This does not bring back the question `default_root()` exists to avoid -- two
+of the first three real installs failed because the answer and the folders on
+disk disagreed. Nothing is asked. The folder is chosen, recorded and announced
+in the same breath, so the config and the disk still cannot disagree.
+
+An explicit `--root` is honoured. Somebody who names a folder has made a
+decision, and an install that lands somewhere they did not name and cannot
+find is worse than the problem being avoided.
+
+Found while writing it: the redirect was first placed *after* `scaffold.plan()`,
+so the plan would have created `Documents` while the message named
+`~/Aki-Agent`. Precisely the disagreement above. There is now a test asserting
+the plan is built against the folder that gets announced.
+
+2,009 tests. Both new behaviours were checked red before green.
 
 ---
 

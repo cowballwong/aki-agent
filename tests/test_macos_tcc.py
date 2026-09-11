@@ -304,3 +304,113 @@ def test_the_move_happens_and_the_new_location_is_recorded(tmp_path,
         encoding="utf-8") == "theirs"
     assert saved_root_at_save_time["root"] == str(target)
     assert seen["root"] == target / "01_Config" / "engine"
+
+
+# ---------------------------------------------------------------------------
+# Not installing there in the first place
+# ---------------------------------------------------------------------------
+
+class _ScaffoldArgs:
+    def __init__(self, root="", yes=False):
+        self.root = root
+        self.yes = yes
+        self.workspaces = ""
+        self.no_examples = True
+
+
+class _Layout:
+    def __init__(self):
+        self.root = None
+        self.workspaces = ()
+        self.schema = None
+
+
+class _Config:
+    def __init__(self):
+        self.layout = _Layout()
+
+
+def test_a_first_install_in_documents_goes_somewhere_that_works(
+        tmp_path, monkeypatch, capsys):
+    """A note saying "this will not work" is still an install that does not
+    work. Nothing is asked; the folder is changed and said out loud."""
+    from aki_agent import cli
+
+    monkeypatch.setattr(paths, "is_macos", lambda: True)
+    monkeypatch.setattr(paths, "home", lambda: tmp_path)
+    started_in = tmp_path / "Documents"
+    started_in.mkdir()
+    monkeypatch.setattr(cli.paths_module, "default_root", lambda: started_in)
+    config = _Config()
+    monkeypatch.setattr(cli, "_load_config", lambda: (config, ""))
+
+    cli.cmd_scaffold(_ScaffoldArgs())
+
+    out = capsys.readouterr().out
+    assert config.layout.root == tmp_path / "Aki-Agent"
+    assert "Not installing in" in out
+    assert str(tmp_path / "Aki-Agent") in out
+
+
+def test_the_plan_is_built_against_the_folder_that_is_announced(
+        tmp_path, monkeypatch, capsys):
+    """Changed after `scaffold.plan()` and the plan creates Documents while
+    the message names somewhere else -- the config and the disk disagreeing,
+    which is the failure `default_root()` exists to prevent."""
+    from aki_agent import cli, scaffold
+
+    monkeypatch.setattr(paths, "is_macos", lambda: True)
+    monkeypatch.setattr(paths, "home", lambda: tmp_path)
+    started_in = tmp_path / "Documents"
+    started_in.mkdir()
+    monkeypatch.setattr(cli.paths_module, "default_root", lambda: started_in)
+    monkeypatch.setattr(cli, "_load_config", lambda: (_Config(), ""))
+
+    planned = []
+    real_plan = scaffold.plan
+    monkeypatch.setattr(scaffold, "plan",
+                        lambda root, **kw: planned.append(root) or
+                        real_plan(root, **kw))
+
+    cli.cmd_scaffold(_ScaffoldArgs())
+
+    assert planned == [tmp_path / "Aki-Agent"]
+
+
+def test_an_explicit_root_is_a_decision_and_is_honoured(tmp_path, monkeypatch,
+                                                        capsys):
+    """`--root` is somebody saying where they want it. Overriding that would
+    be worse than the problem: the install would land somewhere they did not
+    name and could not find."""
+    from aki_agent import cli
+
+    monkeypatch.setattr(paths, "is_macos", lambda: True)
+    monkeypatch.setattr(paths, "home", lambda: tmp_path)
+    chosen = tmp_path / "Documents" / "Mine"
+    config = _Config()
+    monkeypatch.setattr(cli, "_load_config", lambda: (config, ""))
+
+    cli.cmd_scaffold(_ScaffoldArgs(root=str(chosen)))
+
+    assert config.layout.root == chosen
+    assert "Not installing in" not in capsys.readouterr().out
+
+
+def test_windows_installs_in_documents_without_being_moved(tmp_path,
+                                                           monkeypatch, capsys):
+    """Windows has no such restriction, and moving somebody's folder for a
+    problem their machine does not have is its own bug."""
+    from aki_agent import cli
+
+    monkeypatch.setattr(paths, "is_macos", lambda: False)
+    monkeypatch.setattr(paths, "home", lambda: tmp_path)
+    started_in = tmp_path / "Documents"
+    started_in.mkdir()
+    monkeypatch.setattr(cli.paths_module, "default_root", lambda: started_in)
+    config = _Config()
+    monkeypatch.setattr(cli, "_load_config", lambda: (config, ""))
+
+    cli.cmd_scaffold(_ScaffoldArgs())
+
+    assert config.layout.root == started_in
+    assert "Not installing in" not in capsys.readouterr().out
