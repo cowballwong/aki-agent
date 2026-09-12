@@ -178,6 +178,42 @@ def test_the_defaults_were_already_right():
     assert scaffold.numbered(scaffold.DEFAULT_WORKSPACES) == scaffold.DEFAULT_WORKSPACES
 
 
+def test_a_user_folder_with_a_space_in_it_still_starts(tmp_path):
+    """C:\\Users\\Anna Smith -- reported by a user, 2026-09-12.
+
+    The launcher carried `""%~f0""` and `""...dashboard.vbs""` from the first
+    commit. `start` has already consumed the leading empty `""` as the window
+    title, so a second doubled pair around the path collapses to none at all,
+    and whatever receives it is handed everything up to the first space. What
+    the user saw was the whole launcher dying on line one:
+
+        'C:\\Users\\Anna' is not recognized as an internal or external command
+
+    and the dashboard half failing silently, because `//B` shows no dialog.
+
+    Invisible on any machine whose user folder has no space in it, which is
+    every machine this package was developed on, and why it lived so long.
+    """
+    spaced = tmp_path / "Anna Smith" / "aki-agent"
+    script = launcher.windows_launcher(
+        launcher.LauncherOptions(workspace=tmp_path / "Anna Smith" / "Work",
+                                 open_dashboard=True),
+        spaced)
+
+    assert 'cmd /c "%~f0"' in script
+    assert 'cmd /c ""%~f0""' not in script
+
+    # Every path sits inside exactly one pair of quotes. Counted rather than
+    # matched against a literal, so the next line to name a path is checked
+    # too.
+    for line in script.splitlines():
+        if "Anna Smith" not in line:
+            continue
+        assert '""' not in line.replace('start ""', "", 1), \
+            f"doubled quotes collapse and split the path: {line}"
+        assert line.count('"') % 2 == 0, f"unbalanced quotes: {line}"
+
+
 def test_the_windows_launcher_reopens_itself_in_windows_terminal():
     """Double-clicking a .bat gets the old console host (reported 2026-08-19).
 

@@ -546,6 +546,46 @@ and the tests. The test above is what catches it when it is not.
 
 ---
 
+## 0.48.11 - 2026-09-12 - a user folder with a space in it
+
+Reported within hours of the release before it, by somebody whose Windows
+account name has a space in it. They double-clicked the launcher and got one
+line back:
+
+    'C:\Users\Anna' is not recognized as an internal or external command
+
+The launcher had carried it since the first commit. Two lines quoted a path
+twice over -- `""%~f0""` and `""...dashboard.vbs""` -- and `start` has already
+taken the leading empty `""` as the window title, so the second pair collapses
+to no quotes at all. Whatever receives the path is handed everything up to the
+first space, and a folder name with a space in it is cut in half.
+
+Every machine this package has been developed or tested on has a user folder
+with no space in it. That is the whole reason it lived this long: the collapse
+is real on all of them and invisible on all of them.
+
+- `start "" wt cmd /c "%~f0"` -- one pair. This was the visible failure: the
+  launcher died before a single line of it ran.
+- `start "" wscript.exe //B //Nologo "...\dashboard.vbs"` -- one pair. This
+  half failed *silently*, because `//B` shows no dialog. On any such machine
+  the dashboard has never opened, and nothing anywhere said so.
+- `test_a_user_folder_with_a_space_in_it_still_starts` renders the launcher
+  against a path containing a space and counts the quotes on every line that
+  names a path, so the next line to name one is checked too.
+
+Verified by running the real generated launcher out of a folder whose name
+contains a space: Windows Terminal opens, the session starts, the dashboard
+starts. The macOS launcher was already correct and is unchanged.
+
+Anyone already installed gets the corrected file from `upgrade` or from
+`doctor`, both of which rewrite the launcher while preserving the choices in
+it. Somebody who cannot start at all can edit the two lines by hand and delete
+the doubled quotes.
+
+2,049 tests.
+
+---
+
 ## What is still not true
 
 - **macOS is now run, but rarely.** The first real install was 2026-09-11

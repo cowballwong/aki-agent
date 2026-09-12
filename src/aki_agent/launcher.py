@@ -408,7 +408,18 @@ def windows_launcher(options: LauncherOptions,
             # steals focus on the way there. The only terminal a person
             # should see is their assistant's own.
             f'start "" wscript.exe //B //Nologo '
-            f'""{package_root}\\bin\\dashboard.vbs""\r\n'
+            # ONE pair of quotes, not two. `""path""` was here from
+            # the first commit and is wrong: `start` has already taken
+            # the leading empty `""` as the window title, so the second
+            # pair collapses to no quotes at all. Whatever receives the
+            # path is handed everything up to the first space, and a
+            # folder name with a space in it is cut in half:
+            # C:\Users\Anna out of C:\Users\Anna Smith.
+            #
+            # This half failed SILENTLY, because //B shows no dialog. On
+            # any such machine the dashboard has simply never opened and
+            # nothing anywhere said so.
+            f'"{package_root}\\bin\\dashboard.vbs"\r\n'
         )
 
     return (
@@ -440,7 +451,15 @@ def windows_launcher(options: LauncherOptions,
         # does not exist on this machine makes Terminal open on an error
         # instead of the assistant. The default profile is whatever they
         # already chose.
-        'start "" wt cmd /c ""%~f0""\r\n'
+        # Quoted ONCE -- see the note on the dashboard line above. The
+        # doubled pair collapses, Windows Terminal hands cmd an unquoted
+        # path, and a user folder with a space in it dies on the spot:
+        #
+        #     'C:\Users\Anna' is not recognized as an internal or
+        #     external command
+        #
+        # That is the entire launcher gone before one line of it has run.
+        'start "" wt cmd /c "%~f0"\r\n'
         "exit /b 0\r\n"
         "\r\n"
         ":run\r\n"
