@@ -322,6 +322,19 @@ def cmd_specialists(args) -> int:
     return 0
 
 
+def cmd_inventory(args) -> int:
+    """Everything the assistant has, so it never has to answer from memory.
+
+    The whole point is that it is one command. See `inventory.py` for why the
+    five separate ones this replaces were a design fault rather than a
+    convenience.
+    """
+    from . import inventory
+
+    print(inventory.report())
+    return 0
+
+
 def cmd_check(args) -> int:
     """Put a draft in front of the built-in checker before it goes anywhere."""
     from . import sentinel
@@ -2868,6 +2881,11 @@ def build_parser() -> argparse.ArgumentParser:
     listing_specialists = subparsers.add_parser(
         "specialists", help="list the specialists")
     listing_specialists.set_defaults(func=cmd_specialists)
+
+    listing_inventory = subparsers.add_parser(
+        "inventory",
+        help="specialists, skills and knowledge -- what this assistant has")
+    listing_inventory.set_defaults(func=cmd_inventory)
 
     making = subparsers.add_parser("new-specialist",
                                    help="create a specialist (read-only by default)")

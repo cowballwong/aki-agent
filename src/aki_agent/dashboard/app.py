@@ -1132,6 +1132,18 @@ def create_app(config_path: Path | None = None) -> Flask:
         if not name:
             return redirect(url_for("index"))
 
+        # A blank workspace is refused rather than joined onto the work root.
+        #
+        # `plan_project` builds `<work root>/<workspace>/<name>`, and an empty
+        # middle segment collapses that to `<work root>/<name>` -- a folder
+        # created alongside the workspaces, looking like one. The template that
+        # sent a blank has been fixed; this is here because the cost of the two
+        # failures is not the same. A form that posts nothing produces a
+        # project the user cannot find and no error; refusing produces no
+        # project, which is what they will notice and say.
+        if not space_name:
+            return redirect(url_for("index"))
+
         try:
             loaded = load_config()
         except config_module.ConfigError as exc:

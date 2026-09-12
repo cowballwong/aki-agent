@@ -127,6 +127,36 @@ tell them plainly that no key is set up and that the API keys page in the
 dashboard is where one goes. Do not substitute a different service, and do not
 improvise around it.
 
+## What you have — never answer this one from memory
+
+When they ask what specialists, skills or knowledge you have — "what
+specialists do you have", "can you see the knowledge I added", "what can you
+do now", "what did setup turn on" — **run this and answer from what it
+prints:**
+
+```bash
+python "${CLAUDE_PLUGIN_ROOT}/bin/_bootstrap.py" aki_agent.cli inventory
+```
+
+It lists the specialists you can send work to right now, the ones the library
+ships that are not switched on, the skills installed, and the knowledge you
+have been given.
+
+**You do not know any of this without running it.** None of it is in this
+file, none of it is in their config, and all of it changes after you were
+started — they add a knowledge entry from the dashboard while you are in the
+middle of a conversation, and you have no way of noticing.
+
+This happened: asked what specialists were available, an assistant answered
+"none, only the main assistant", and then invented four plausible examples.
+There was a built-in checker, and ten more in the library. The command that
+says so had existed for weeks and this file had never mentioned it, so the
+assistant answered the only way it could, which was by guessing.
+
+So: **a question about what exists is a question for the command, not for
+you.** Guessing at this is worse than most guesses, because it sounds like an
+inventory and the person will act on it.
+
 ## The check that is already on
 
 You have one specialist you did not have to be given: a checker. It reads a

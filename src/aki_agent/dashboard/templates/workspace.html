@@ -18,14 +18,23 @@
   {% include "_panels.html" with context %}
 {% endif %}
 
-{% if items %}
-  {% include "_items.html" with context %}
-{% else %}
-  <p class="empty">Nothing in this workspace yet. Ask me to start
-    {{ schema.item_label.lower() }} — I will show you what I would create
-    before anything is written.</p>
-{% endif %}
+{# INCLUDED EVEN WHEN THE WORKSPACE IS EMPTY
 
+   This was `{% if items %}`, with a sentence in the else branch saying to ask
+   the assistant instead. The card grid is where the [+] lives, so hiding it
+   until there was something in the workspace hid the control that puts the
+   first thing there.
+
+   Every workspace is empty at the moment it is created, so this was not an
+   edge case: it was every new workspace, and the only ones that worked were
+   the ones that came with the install.
+
+   The front page has always included this unconditionally. Two copies of the
+   same decision, one of them wrong, is what let it go unnoticed. #}
+{% if not items %}
+  <p class="empty">Nothing in this workspace yet.</p>
+{% endif %}
+{% include "_items.html" with context %}
 {# The "+ Add" and "- Remove" fold-outs stood here. They are the card grid's
    job now: the empty card adds one, and the minus on a card in Edit mode
    retires it. Two ways to do the same thing, one of them three clicks deeper,

@@ -379,3 +379,70 @@ def test_a_count_shows_on_the_group_and_not_only_inside_it(installed):
     # cannot help you with.
     system = navigation.current("/notifications")
     assert system.count({"held_count": 5}) == 0
+
+
+# ---------------------------------------------------------------------------
+# A workspace made from the dashboard, and the first project in it
+#
+# Reported: a project could not be created inside a workspace made from the
+# dashboard, while the workspaces that came with the install were fine.
+#
+# Both halves were covered and the join between them was not. One test adds a
+# workspace; another adds a project to the workspace the fixture already had.
+# Nothing had ever added a project to a workspace the dashboard itself had
+# just made -- which is empty, which is the whole of the bug.
+
+
+def test_an_empty_workspace_still_offers_the_add_card(installed):
+    """The [+] is what puts the first project in, so it cannot be hidden until
+    there is one. `workspace.html` showed the card grid only `{% if items %}`,
+    and a workspace is empty at the moment it is created."""
+    client = browser_for(installed)
+    client.post("/workspace/new", data={"token": token(), "name": "Church"})
+
+    html = client.get("/workspace/02_Church").get_data(as_text=True)
+
+    assert 'id="additem"' in html, "an empty workspace has no way to add the first project"
+    assert 'name="workspace" value="02_Church"' in html, \
+        "the add form must say which workspace it is adding to"
+
+
+def test_a_project_can_be_added_to_a_workspace_made_from_the_dashboard(installed):
+    root = installed.parent.parent
+    client = browser_for(installed)
+
+    client.post("/workspace/new", data={"token": token(), "name": "Church"})
+    made = root / "03_Workspace" / "02_Church"
+    assert made.is_dir(), [p.name for p in (root / "03_Workspace").iterdir()]
+
+    client.post("/item/new", data={
+        "token": token(), "workspace": "02_Church", "name": "Choir Rota"})
+
+    assert [p for p in made.iterdir() if p.is_dir()], (
+        "a project added to a dashboard-made workspace was not created")
+
+
+def test_the_single_workspace_front_page_names_its_workspace(installed):
+    """With one workspace the front page shows its projects directly, and the
+    add form has to carry that workspace's name. It read `name`, which only the
+    workspace page sets, so the field went out empty."""
+    html = browser_for(installed).get("/projects").get_data(as_text=True)
+
+    assert 'name="workspace" value="01_Work"' in html, \
+        "the front page's add form must name the workspace it is adding to"
+
+
+def test_a_project_is_never_created_outside_a_workspace(installed):
+    """The guard behind the template fix.
+
+    A blank workspace used to collapse to the work root, and the project was
+    created beside the workspaces rather than inside one -- with no error, so
+    the user simply could not find what they had just added."""
+    root = installed.parent.parent
+    before = sorted(p.name for p in (root / "03_Workspace").iterdir())
+
+    browser_for(installed).post("/item/new", data={
+        "token": token(), "workspace": "", "name": "Ghost"})
+
+    after = sorted(p.name for p in (root / "03_Workspace").iterdir())
+    assert after == before, f"a stray folder was created: {set(after) - set(before)}"

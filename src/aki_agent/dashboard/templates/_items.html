@@ -18,7 +18,21 @@
   workspace) and the workspace page, so the two can never drift into showing
   the same data two different ways.
 #}
-{% set space_name = name if name is defined else '' %}
+{# WHICH WORKSPACE THIS FORM ACTS ON
+
+   The workspace page passes `name`. The front page does not -- with a single
+   workspace it shows that workspace's projects directly, and calls it
+   `only_name`. This read `name` alone, so on the front page the hidden field
+   went out empty, and `/item/new` was handed a blank workspace.
+
+   Blank did not fail. `plan_project` joined it onto the work root, found that
+   the root exists, and created the project THERE -- a folder sitting beside
+   the workspaces looking like one of them. Found while fixing the empty
+   workspace page, not reported, which is the usual way round for this one:
+   the person adds a project, it does not appear in the workspace, and there
+   is no error to go looking for. #}
+{% set space_name = name if name is defined
+   else (only_name if only_name is defined else '') %}
 
 <form method="post" action="/item/rename" id="renameitems">
 <input type="hidden" name="token" value="{{ token }}">
