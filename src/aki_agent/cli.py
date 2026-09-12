@@ -1159,6 +1159,14 @@ def cmd_tools(args) -> int:
     if args.job:
         resolved = apis.for_job(loaded, args.job)
         if resolved is None:
+            trouble = secrets.store_unavailable()
+            if trouble:
+                # Do not send somebody to fetch a key they already have.
+                print(f"Nothing could be resolved for '{args.job}', but the "
+                      f"credential store cannot be read here. {trouble}")
+                print("Tell the user that you cannot see their keys from this "
+                      "session, NOT that no key is set up.")
+                return 1
             print(f"Nothing is set up for '{args.job}'. Tell the user plainly "
                   "that no key is set up for it, and that the API keys page in "
                   "the dashboard is where one goes. Do not offer to do it "
@@ -1178,8 +1186,24 @@ def cmd_tools(args) -> int:
         for row in rows:
             jobs = ", ".join(row["job_labels"]) or "nothing yet"
             state = "key saved" if row["has_key"] else "NO KEY"
+            if row["has_key"] and row["key_where"] == "file":
+                state = "key saved (in the file store, not the password manager)"
             switch = "" if row["enabled"] else ", switched off"
             print(f"  - {row['name']}: {jobs} ({state}{switch})")
+
+    # Said once, at the end, and only when it is true.
+    #
+    # "NO KEY" and "I cannot open the place keys are kept" are different
+    # sentences and this command used to print only the first. An assistant
+    # relaying it told its user their key was not entered, hours after they
+    # had entered it, and sent them off to fetch another one.
+    trouble = secrets.store_unavailable()
+    if trouble:
+        print()
+        print(f"WARNING: the credential store cannot be read here. {trouble}")
+        print("Any 'NO KEY' above may be a key that exists and cannot be seen "
+              "from this session. Say that, rather than telling the user to "
+              "add one.")
     return 0
 
 

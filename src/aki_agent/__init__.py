@@ -20,4 +20,4 @@ __all__ = ["paths", "schema", "config", "workspace", "doctor"]
 
 # Kept separate from any product name on purpose -- the package has not been
 # named yet, and the version is about the code, not the branding.
-__version__ = "0.48.9"
+__version__ = "0.48.10"

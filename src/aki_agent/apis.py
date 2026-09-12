@@ -330,6 +330,11 @@ def listing(config) -> list[dict]:
             "tool": entry.tool,
             "name": display_name(entry),
             "has_key": has_key(entry.tool),
+            # Which store actually holds it. Carried alongside `has_key`
+            # because "no key" and "a key this process cannot see" send the
+            # user to two different places, and only one of them is "go and
+            # get a key". Still never the value.
+            "key_where": secrets_module.where_is(secret_name(entry.tool)),
             "jobs": tuple(entry.jobs),
             "job_labels": tuple(job_label(one) for one in entry.jobs),
             "available_jobs": available_jobs(entry),

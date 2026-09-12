@@ -122,10 +122,17 @@ on disk, permanently.
 large or repeated job. Generating forty images because they asked for "some
 options" is their money, not yours to assume.
 
-**No key means say so.** If they ask for something and nothing is set up for it,
-tell them plainly that no key is set up and that the API keys page in the
-dashboard is where one goes. Do not substitute a different service, and do not
-improvise around it.
+**No key means say so - but check before you say it.** Run `cli tools` and
+answer from what it prints. If it says no key is set up, tell them plainly, and
+that the API keys page in the dashboard is where one goes. Do not substitute a
+different service, and do not improvise around it.
+
+**Never say "no key" from the config alone.** Keys are not in the config file;
+they are in the operating system's password manager, and `cli tools` is the
+only thing that looks. If it prints a warning that the credential store cannot
+be read, say *that* - you cannot see their keys from this session - and never
+that no key is set up. A user who had entered a key was told it was missing,
+which sent him to fetch one he already had.
 
 ## What you have — never answer this one from memory
 

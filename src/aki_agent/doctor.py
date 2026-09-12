@@ -676,6 +676,46 @@ def check_credential_store_reachable() -> Check:
     )
 
 
+def check_keys_are_not_split_between_two_stores() -> Check:
+    """Keys sitting in the file fallback while this process uses the keyring.
+
+    The two halves of this package can disagree about where secrets live. The
+    dashboard runs from the engine's environment; a session runs from whichever
+    Python started it. One imports `keyring` and writes to the password
+    manager, the other does not and writes a file. Both report success, and
+    every later question about the key is answered "no key".
+
+    `get_secret` now reads both, so this is no longer a failure -- but it is
+    still worth saying, because half the user's keys are then in a file rather
+    than in their password manager, which is not what they were told when they
+    saved them.
+    """
+    from . import secrets as secrets_module
+
+    if not secrets_module.using_os_store():
+        # This process has no keyring, so the file IS the store here. That is
+        # the documented fallback and `fallback_warning` already says it.
+        return Check("Saved passwords are all in one place", True)
+
+    try:
+        stray = sorted(secrets_module._read_fallback().keys())
+    except Exception:                                     # noqa: BLE001
+        stray = []
+    if not stray:
+        return Check("Saved passwords are all in one place", True)
+
+    return Check(
+        "Saved passwords are all in one place", False, warning_only=True,
+        detail=(f"{len(stray)} secret(s) are in the file store while this "
+                "session uses your password manager, so they were written by "
+                "a part of the assistant running a different Python. They are "
+                "still found and used; they are simply less well protected "
+                "than the ones in the password manager."),
+        fix=("Re-enter those on the dashboard's API keys page from this "
+             "machine, and they will move into the password manager."),
+    )
+
+
 def check_which_brain() -> Check:
     """Say which model this install talks to, and whether it still can.
 
@@ -1076,6 +1116,7 @@ def run_all() -> list[Check]:
     checks.append(check_workspace_names(loaded))
     checks.append(check_session_is_current())
     checks.append(check_credential_store_reachable())
+    checks.append(check_keys_are_not_split_between_two_stores())
     checks.append(check_launcher())
     checks.append(check_scheduling_can_reach_the_workspace(loaded))
     checks.append(check_no_stray_engines())

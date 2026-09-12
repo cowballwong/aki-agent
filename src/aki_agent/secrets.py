@@ -212,14 +212,55 @@ def get_secret(key: str) -> str | None:
     as a secret that was never stored: they have no value and must carry on.
     So the answer is None, and the difference is reported by
     `store_unavailable()` for the one place that should say it out loud.
+
+    BOTH STORES ARE READ, NOT ONE (2026-09-12)
+    ------------------------------------------
+    This used to read the OS store *or* the file, decided by whether a keyring
+    could be imported right now. Two processes can answer that question
+    differently on the same machine -- the dashboard runs from the engine's
+    environment, a session runs from whichever Python started it -- and then
+    one of them writes to the password manager while the other reads a file
+    that has never heard of the key.
+
+    Nothing fails. The key is saved, the save is reported, and every later
+    question about it is answered "no key". A user who has just typed one in
+    is told it is not there, which is the worst available answer because it
+    sends them to do the thing they have already done.
+
+    So a miss in the preferred store falls through to the other one. The file
+    is this package's own fallback, in the app folder, locked down on write;
+    reading it when the keyring has nothing costs no safety and is the only
+    thing that makes a key survive being written by the other half.
     """
     keyring = _keyring_or_none()
     if keyring is not None:
         try:
-            return keyring.get_password(SERVICE_NAME, key)
+            found = keyring.get_password(SERVICE_NAME, key)
         except Exception:  # noqa: BLE001 -- backends raise their own types
-            return None
+            found = None
+        if found:
+            return found
     return _read_fallback().get(key)
+
+
+def where_is(key: str) -> str:
+    """Which store actually holds this secret: "os", "file", or "".
+
+    Exists so a caller can tell three states apart that `get_secret` collapses
+    into one: stored where this process expects, stored in the *other* half
+    (see the note above), and genuinely not stored at all. Reports location
+    only, never the value.
+    """
+    keyring = _keyring_or_none()
+    if keyring is not None:
+        try:
+            if keyring.get_password(SERVICE_NAME, key):
+                return "os"
+        except Exception:  # noqa: BLE001
+            pass
+    if _read_fallback().get(key):
+        return "file"
+    return ""
 
 
 def store_unavailable() -> str:
