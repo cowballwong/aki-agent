@@ -1093,6 +1093,225 @@ def check_the_library_is_there() -> Check:
     )
 
 
+def check_messaging() -> Check:
+    """Does the messaging account actually work -- or only look configured?
+
+    THE FAILURE THIS EXISTS FOR (2026-09-12)
+    ----------------------------------------
+    A user's report: the token and the chat id are the part that most often
+    comes out of an install wrong, and you find out when you open the
+    launcher, which is long after the person who could have fixed it has gone.
+
+    Until now `doctor` had twenty-five checks and not one of them was about
+    messaging. The capability was already in the package -- `telegram_chat`
+    calls `getMe` for the dashboard's chat box -- it had simply never been
+    asked at diagnosis time.
+
+    WHAT THIS CAN AND CANNOT PROVE
+    ------------------------------
+    `getMe` proves the TOKEN. It cannot prove the chat id: a token with the
+    wrong recipient answers `getMe` perfectly and then delivers nothing. The
+    only thing that proves a chat id is a message arriving on the phone, so
+    that lives in `cli check-messaging`, which sends one. This check does
+    everything that can be done without messaging the person.
+    """
+    try:
+        from . import telegram_setup
+    except Exception as exc:                             # noqa: BLE001
+        return Check("Messaging", False, warning_only=True,
+                     detail=f"could not be read: {exc}")
+
+    try:
+        token = telegram_setup.read_token()
+        chat_id = telegram_setup.first_allowed()
+    except Exception as exc:                             # noqa: BLE001
+        return Check("Messaging", False, warning_only=True,
+                     detail=f"could not be read: {exc}")
+
+    if not token:
+        return Check(
+            "Messaging", False, warning_only=True,
+            detail="no messaging account is connected yet",
+            fix="Run /connect-telegram if you want messages on your phone.",
+        )
+
+    import json as _json
+    import urllib.error
+    import urllib.request
+
+    try:
+        with urllib.request.urlopen(
+                f"https://api.telegram.org/bot{token}/getMe", timeout=10) as r:
+            body = _json.loads(r.read().decode("utf-8"))
+        username = (body.get("result") or {}).get("username") or "?"
+    except urllib.error.HTTPError as exc:
+        # 401 is the common one and it has a precise meaning: the token is
+        # not a token any more. Say that, rather than the status code.
+        reason = "the token is not valid" if exc.code == 401 else f"HTTP {exc.code}"
+        return Check(
+            "Messaging", False,
+            detail=f"Telegram rejected the saved token -- {reason}",
+            fix="Run /connect-telegram and paste the token from BotFather "
+                "again. Nothing else needs redoing.",
+        )
+    except Exception as exc:                             # noqa: BLE001
+        # No network is not a broken install, and saying so would send
+        # somebody hunting for a fault that is not there.
+        #
+        # BUT NOT EVERY UNREACHABLE IS OFFLINE (a test Mac, 2026-09-12)
+        # ------------------------------------------------------------
+        # The first version of this said "if this machine is offline, ignore
+        # it" for anything that was not an HTTP error. On a test Mac it then
+        # said exactly that over a CERTIFICATE_VERIFY_FAILED -- a machine
+        # that was online, with something re-signing TLS in the middle. The
+        # advice was wrong and it pointed away from the actual fault, which
+        # is the one thing a line in this file must never do.
+        reason = str(exc)
+        if "CERTIFICATE_VERIFY_FAILED" in reason or "SSLCert" in reason:
+            return Check(
+                "Messaging", False, warning_only=True,
+                detail="this machine cannot verify Telegram's certificate, "
+                       "so messages to your phone will fail",
+                fix="Something is re-signing secure connections here -- a "
+                    "company network, a VPN, or antivirus that inspects "
+                    "traffic. On a Mac, a Python installed from python.org "
+                    "also needs its 'Install Certificates.command' run once. "
+                    "This is not a fault in your assistant.",
+            )
+        return Check("Messaging", False, warning_only=True,
+                     detail=f"could not reach Telegram to check: {exc}",
+                     fix="If this machine is offline, ignore it.")
+
+    if not chat_id:
+        return Check(
+            "Messaging", False,
+            detail=f"the bot @{username} is real, but nobody is allowed to "
+                   "talk to it -- so nothing will ever be delivered",
+            fix="Run /connect-telegram to add yourself.",
+        )
+
+    return Check("Messaging", True,
+                 detail=f"@{username}, delivering to {chat_id}")
+
+
+def check_dashboard_serves() -> Check:
+    """Build the dashboard and ask it for a page -- do not assume it starts.
+
+    THE FAILURE THIS EXISTS FOR (2026-09-12)
+    ----------------------------------------
+    Second on the same report, and the same shape as the first: you find out the
+    dashboard is broken when you open the launcher, not when you install it.
+
+    `check_launcher` already exists and is not this. It asks whether there is
+    a file to double-click and whether the machine may execute it -- proxies
+    for the real question, which is whether a page comes back. An import
+    error inside `app.py`, a template that will not render, a dependency
+    declared but not installed: every one of those passes `check_launcher`
+    and produces a browser tab that does not work.
+
+    WHY A TEST CLIENT AND NOT A REAL PORT
+    -------------------------------------
+    Flask's test client runs the whole application -- imports, configuration,
+    routing, templates -- without binding anything. That keeps this check
+    fast, keeps it from fighting whatever already holds 4321, and keeps it
+    from leaving a stray server behind if it is interrupted. The socket is
+    the one thing it does not exercise, and `run()` already turns a taken
+    port into a sentence rather than a silent failure.
+    """
+    try:
+        import flask  # noqa: F401
+    except ImportError:
+        return Check(
+            "Dashboard", False, warning_only=True,
+            detail="Flask is not installed, so there is no dashboard.",
+            fix=f'Run:  {_pip_hint()} install "Flask"',
+        )
+
+    try:
+        from .dashboard.app import create_app
+    except Exception as exc:                             # noqa: BLE001
+        return Check(
+            "Dashboard", False,
+            detail=f"the dashboard cannot even be loaded: {exc}",
+            fix="This is a fault in the installed package rather than in "
+                "anything you did. Report it with this line.",
+        )
+
+    # Built and requested separately, because the two failures are different
+    # sentences: one is a dashboard that never comes up, the other is one that
+    # comes up and then cannot draw a page. Telling a person the wrong one of
+    # those sends them to the wrong place.
+    try:
+        app = create_app()
+        app.config["TESTING"] = True
+    except Exception as exc:                             # noqa: BLE001
+        return Check(
+            "Dashboard", False,
+            detail=f"the dashboard will not start: {exc}",
+            fix="Usually your configuration. Check the lines above this one "
+                "first; if they are all fine, run it from a terminal to see "
+                "the whole error:  " + _run("aki_agent.dashboard", ""),
+        )
+
+    try:
+        with app.test_client() as caller:
+            answer = caller.get("/", follow_redirects=True)
+    except Exception as exc:                             # noqa: BLE001
+        return Check(
+            "Dashboard", False,
+            detail=f"the dashboard starts but its first page fails: {exc}",
+            fix="Run the dashboard from a terminal to see the whole error:  "
+                + _run("aki_agent.dashboard", ""),
+        )
+
+    # A login page is a working dashboard; it is what a password-protected
+    # one is supposed to return. Anything in the 500s is not.
+    if answer.status_code >= 500:
+        return Check(
+            "Dashboard", False,
+            detail=f"the first page returned HTTP {answer.status_code}",
+            fix="Run the dashboard from a terminal to see the whole error:  "
+                + _run("aki_agent.dashboard", ""),
+        )
+
+    return Check("Dashboard", True,
+                 detail=f"serves its first page (HTTP {answer.status_code})")
+
+
+def check_a_configuration_was_replaced() -> Check:
+    """Say when a previous configuration was set aside, so it can be found.
+
+    `config_guard` keeps a copy of any configuration a write was about to
+    replace. A copy nobody knows about is not much better than no copy, and
+    the person most likely to need it is the one who has just noticed their
+    assistant does not know who they are -- which is the moment they run this.
+    """
+    try:
+        from . import config_guard
+    except Exception:                                    # noqa: BLE001
+        return Check("Previous configurations", True, detail="none kept")
+
+    try:
+        kept = sorted(config_guard.history_dir().glob("config-*.yaml"))
+    except Exception:                                    # noqa: BLE001
+        return Check("Previous configurations", True, detail="none kept")
+
+    if not kept:
+        return Check("Previous configurations", True, detail="none kept")
+
+    import datetime as _dt
+
+    newest = kept[-1]
+    when = _dt.datetime.fromtimestamp(newest.stat().st_mtime)
+    return Check(
+        "Previous configurations", True,
+        detail=(f"{len(kept)} kept; the most recent was set aside "
+                f"{when:%d %b %Y at %H:%M}"),
+        fix=(f"If your assistant has forgotten something it used to know, "
+             f"the older answers are in {config_guard.history_dir()}"),
+    )
+
+
 def run_all() -> list[Check]:
     checks: list[Check] = [check_python()]
     checks.extend(check_packages())
@@ -1124,6 +1343,9 @@ def run_all() -> list[Check]:
     checks.append(check_nothing_was_set_aside())
     checks.append(check_the_library_is_there())
     checks.append(check_which_brain())
+    checks.append(check_messaging())
+    checks.append(check_dashboard_serves())
+    checks.append(check_a_configuration_was_replaced())
     return checks
 
 

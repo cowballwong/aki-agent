@@ -916,6 +916,59 @@ def cmd_channel_check(args) -> int:
     return 0
 
 
+def cmd_check_messaging(args) -> int:
+    """Prove the phone actually receives -- by sending something to it.
+
+    WHY THIS EXISTS AND `channel-check` IS NOT ENOUGH (2026-09-12)
+    --------------------------------------------------------------
+    A user's report: the messaging credentials are the part that most often comes
+    out of an install wrong, and nobody finds out until the launcher is
+    opened, long afterwards.
+
+    `channel-check` runs at every launch and asks `available()`, which is
+    true when a token and a recipient are both non-empty strings. A dead
+    token is a non-empty string. So is a chat id belonging to somebody else.
+    `doctor`'s messaging check closes the first of those by asking Telegram
+    whether the token is real -- but `getMe` answers perfectly for a token
+    whose recipient is wrong, so the chat id cannot be proved that way.
+
+    The only thing that proves a chat id is a message arriving. That is what
+    this does, and it is why it is a separate command rather than another
+    check: it is the one diagnosis with a side effect, so it happens when
+    somebody asks for it, at the end of an install, and never on a timer.
+
+    The person is watching their phone when it runs. That is the test.
+    """
+    from . import channels
+
+    channel = channels.get("telegram")
+    if channel is None or not channel.available():
+        print("  No messaging account is connected yet.")
+        print("  Run /connect-telegram first, then try this again.")
+        return 1
+
+    message = channels.Message(
+        text=(args.text or
+              "Setup test — if you can read this, your assistant can reach "
+              "your phone. Nothing else to do."),
+        origin="setup test",
+    )
+
+    sent, detail = channel.deliver(message)
+    if sent:
+        print("  Sent. Check your phone now.")
+        print("  If nothing arrives, the token is fine but the recipient is "
+              "wrong — run /connect-telegram and add yourself again.")
+        return 0
+
+    # `deliver` returns Telegram's own reason, which names the real fault
+    # (wrong chat id, bot blocked, bad markup). Pass it through rather than
+    # replacing it with something vaguer.
+    print(f"  Not sent: {detail}")
+    print("  Run /connect-telegram to fix it.")
+    return 1
+
+
 def cmd_events(args) -> int:
     """What has been happening."""
     from . import events
@@ -3063,6 +3116,13 @@ def build_parser() -> argparse.ArgumentParser:
     checking = subparsers.add_parser(
         "channel-check", help="say if the assistant cannot reach you")
     checking.set_defaults(func=cmd_channel_check)
+
+    proving = subparsers.add_parser(
+        "check-messaging",
+        help="send a real message, to prove the phone receives it")
+    proving.add_argument("--text", default="",
+                         help="what to send instead of the default line")
+    proving.set_defaults(func=cmd_check_messaging)
 
     happenings = subparsers.add_parser(
         "events", help="what has been happening")

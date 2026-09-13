@@ -584,6 +584,31 @@ Two things to be accurate about, because both are easy to get wrong:
 - If the install fails, say so and move on. Setup is not blocked by it, and
   `/add-abilities` can be run any time afterwards.
 
+## Before you write anything: is there already a configuration?
+
+**This is the one step in this package that cannot be undone**, so it is also
+the one the guard will stop you on.
+
+A `Write` to a `config.yaml` that already exists is refused the first time. You
+will get a message naming the file, telling you where the old one was copied,
+and giving you the question to ask. That is not a fault — it is the guard doing
+its job, and it exists because the warning about it used to live only in
+`INSTALL.md`, which nobody typing `/aki-agent:setup` has read.
+
+When it stops you: **ask, and wait.**
+
+> You already have an assistant set up here. Do you want to start again from
+> scratch, or change one thing about the setup you have?
+
+Almost always they mean the second. Somebody who says "set me up again" usually
+wants their workspace folder corrected or their name spelled right, not a fresh
+interview and the loss of everything they answered before. **If it is one
+thing, change that one thing and stop** — do not run the rest of this skill.
+
+Only if they genuinely want to start over, write the file again; the second
+attempt goes through. Their previous configuration is kept either way, under
+`state/config-history/`, and you can tell them that.
+
 ## Writing the file
 
 Write to `~/.aki-agent/config.yaml` (Windows:
@@ -781,11 +806,26 @@ through BotFather, takes the bot token, and takes their own numeric chat id
 for the allowlist. Both are needed: the token is how it speaks, the allowlist
 is how it knows to listen to them and to nobody else.
 
-Check what actually landed before saying it is done:
+**Then prove it, by making their phone buzz.** Do not stop at
+`channel-check` -- that asks whether a token and a recipient are both present,
+and a dead token is present, and so is somebody else's chat id. This sends a
+real message, which is the only thing that proves the recipient:
 
 ```bash
-python ~/.aki-agent/aki.py aki_agent.cli channel-check
+python ~/.aki-agent/aki.py aki_agent.cli check-messaging
 ```
+
+Then **ask them whether it arrived, and wait for the answer.** "Sent" means
+Telegram accepted it, not that it reached them.
+
+- **It arrived** -- done. Say so and move on.
+- **Nothing arrived** -- the token works and the recipient is wrong. Run
+  `/connect-telegram` again and take their chat id fresh.
+- **It refused** -- read the reason back to them; it names the fault.
+
+This is here because it is the single most common thing to come out of an
+install broken, and because the old check could not see it: the person finds
+out at the launcher, days later, alone.
 
 If they say no, say plainly that it can be added at any time with
 `/connect-telegram`, and move on.
@@ -816,6 +856,27 @@ them with the report. Two of its checks refer to what you just did — whether
 anything is scheduled, and whether a handoff has ever been written. On a fresh
 machine the handoff is legitimately empty until the first checkpoint fires;
 say that rather than presenting it as a fault.
+
+**Two of its lines are the ones that used to be found out at the launcher.**
+Read both back to them before you say setup is finished:
+
+- **Messaging** — the saved token, checked against Telegram itself.
+- **Dashboard** — the dashboard built and asked for its first page, rather
+  than the launcher file merely being present.
+
+If either is not OK, fix it now, in this conversation, while somebody who
+understands the answer is still here. That is the whole reason they moved
+from the launcher to here.
+
+**Then open the dashboard while they are watching**, and wait until they say
+they can see it:
+
+```bash
+python ~/.aki-agent/aki.py aki_agent.dashboard
+```
+
+A page that renders in a test client and a page they can actually reach in a
+browser are different claims, and only they can confirm the second one.
 
 Then tell them the few things worth knowing:
 - `/doctor` any time something seems wrong

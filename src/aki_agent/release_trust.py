@@ -64,7 +64,33 @@ TRUSTED_KEYS: dict[str, str] = {
 # Never part of what is signed: the signature cannot cover itself, and
 # `__pycache__` is built on the installing machine, not shipped.
 NOT_SIGNED = {MANIFEST_NAME, SIGNATURE_NAME}
-NOT_SIGNED_DIRS = {"__pycache__", ".git", ".pytest_cache", ".ruff_cache"}
+
+# WHY THIS LIST GREW (2026-09-12)
+# -------------------------------
+# There were two exclusion lists: this one, and `make_release.EXCLUDED_*`.
+# They were allowed to disagree, and they did. `bin/sign_repo.py` walks the
+# checkout, signs what this list lets through, and then refuses if anything
+# it signed is not in git -- so a single `desktop.ini`, which `.gitignore`
+# names explicitly and this list did not, was enough to make a signed release
+# impossible. Found when 0.49.0 could not be signed: six stray files, none of
+# them ours, every one already ignored by git.
+#
+# The manifest describes a release, so what a release excludes and what a
+# signature excludes have to be the same set. `make_release` now imports
+# these rather than keeping its own copy, and a test holds the two together.
+NOT_SIGNED_DIRS = {
+    "__pycache__", ".git", ".pytest_cache", ".ruff_cache",
+    # Build output and tooling. Present in a working checkout, never in a
+    # release, and never in git.
+    "_release", "_audit", ".idea", ".vscode", "build", "dist",
+    "venv", ".venv",
+}
+
+# Noise an operating system or a sync client writes into a folder nobody
+# asked it to. `.gitignore` already names these; the signer has to agree.
+NOT_SIGNED_NAMES = {"desktop.ini", "Thumbs.db", ".DS_Store"}
+
+NOT_SIGNED_SUFFIXES = {".pyc", ".pyo", ".zip", ".tmp", ".session", ".log"}
 
 
 @dataclass
@@ -115,7 +141,9 @@ def _files_to_sign(root: Path) -> list[Path]:
             continue
         if relative.as_posix() in NOT_SIGNED:
             continue
-        if path.suffix in (".pyc", ".pyo"):
+        if path.name in NOT_SIGNED_NAMES:
+            continue
+        if path.suffix in NOT_SIGNED_SUFFIXES:
             continue
         found.append(path)
     return sorted(found, key=lambda p: p.relative_to(root).as_posix())

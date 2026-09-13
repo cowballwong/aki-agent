@@ -546,6 +546,95 @@ and the tests. The test above is what catches it when it is not.
 
 ---
 
+## 0.49.0 - 2026-09-12 - found out at the launcher
+
+Asked what actually goes wrong most often, a user named two things: the
+Telegram bot token and chat id are not installed correctly, and nobody finds
+out until the install is finished and the launcher is opened; and second, the
+dashboard, found out the same way.
+
+Both were true, and both had the same cause. `doctor` had twenty-five checks
+and not one of them was about messaging, while the dashboard was covered by
+`check_launcher` -- which asks whether there is a file to double-click and
+whether the machine may execute it. Proxies. An import error inside `app.py`,
+a template that will not render, a token revoked last week: every one of those
+passed, and the person found out when they opened the launcher, days later,
+with nobody around who could fix it.
+
+The same file already had the answer in it. `check_workspace_names` does not
+ask whether the folder exists; it runs the lookup and reads the number back,
+because the first real install wrote workspace names that matched nothing and
+the dashboard came up blank with no error anywhere. That lesson had been
+learned once and not carried across.
+
+- **`check_messaging`** asks Telegram whether the saved token is real, and
+  names the bot it belongs to. `getMe` was already in the package for the
+  dashboard's chat box; it had simply never been asked at diagnosis time.
+- **`check_dashboard_serves`** builds the dashboard and requests its first
+  page through Flask's test client -- the whole application, imports,
+  configuration, routing and templates, without binding a port or fighting
+  whatever already holds 4321.
+- **`cli check-messaging`** sends a real message. This is separate on purpose:
+  `getMe` proves the token and cannot prove the recipient, because it answers
+  perfectly for a token whose chat id belongs to somebody else. The only thing
+  that proves a chat id is a phone buzzing, so it is the one diagnosis with a
+  side effect, and it happens when somebody asks for it, at the end of an
+  install, never on a timer. Setup now runs it and waits to be told it
+  arrived.
+
+Verified on a second machine, which is where the first version of
+`check_messaging` was caught being wrong. On a test Mac the token check hit
+`CERTIFICATE_VERIFY_FAILED` -- something re-signing TLS in the middle -- and
+the check said "if this machine is offline, ignore it." The machine was not
+offline, and the advice pointed away from the fault, which is the one thing a
+line in `doctor` must never do. A certificate failure now says so and names
+the three things that cause it. The same file had just split the dashboard's
+two failures apart for exactly this reason; the sibling case a few lines
+below went unnoticed until it ran somewhere else.
+
+Two things that check out as costs rather than faults: the dashboard check
+takes about 16 seconds on a 2019 Intel Mac, because it genuinely builds the
+dashboard, and `doctor` over a bare SSH shell reports Claude Code as missing
+when it is installed and simply not on that shell's `PATH`.
+
+And the release route, which had quietly stopped working.
+
+`release_trust` and `make_release` each kept a list of what to leave out, and
+were allowed to disagree. `.gitignore` names `desktop.ini`; `make_release`
+named it; the signer did not. `bin/sign_repo.py` signs what the signer's list
+allows and then refuses if anything it signed is absent from git -- so six
+stray files nobody wrote, every one already ignored, made a signed 0.49.0
+impossible. The two lists are now one, `make_release` imports it, and a test
+holds them together. The secret-bearing names stay out of the signer's list
+deliberately: a stray `.env` in a checkout must be signed, so that signing
+refuses rather than passing over it in silence.
+
+And the guard the same conversation turned up.
+
+`INSTALL.md` ends: "Everything here is reversible except one thing: running a
+first-time setup over a configuration that already exists." Nothing enforced
+it. The `setup` skill writes `config.yaml` with the `Write` tool, has no check
+of its own, and its description says it triggers on "start again" -- so
+somebody typing `/aki-agent:setup`, who has never opened `INSTALL.md`, got
+their configuration replaced with no copy kept and nothing said. The assistant
+still started. It simply no longer knew who they were.
+
+A warning in a document the reader will not open is not a guard.
+
+- **`config_guard`**, a `PreToolUse` hook on `Write`. It keeps a copy first --
+  that part happens whether or not anybody reads what comes next, and it is
+  what turns the irreversible thing into a reversible one. Then it refuses
+  once, naming the copy and giving the assistant the question to ask. A second
+  attempt at the same file goes through, because a guard that cannot be got
+  past on purpose is a guard that gets switched off.
+- **`check_a_configuration_was_replaced`** reports the copies in `doctor`, for
+  the person who has just noticed their assistant has forgotten them.
+
+One thing the tests caught rather than review: the first version of the copy
+used a second-resolution timestamp for the filename, and the retry lands
+inside the same second -- so the second copy silently replaced the first, and
+the file being protected was the one that got lost.
+
 ## 0.48.11 - 2026-09-12 - a user folder with a space in it
 
 Reported within hours of the release before it, by somebody whose Windows

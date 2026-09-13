@@ -72,20 +72,13 @@ RELEASE_DIR = PACKAGE_ROOT / "_release"
 # ruff was first run here. Two rules below catch the shape rather than the
 # name: a dot-directory is a tool's, and a leading underscore is ours and
 # private. Keep adding names here too -- the rules are a net, not a policy.
-EXCLUDED_DIRS = {
-    "_release",
-    "_audit",
-    "__pycache__",
-    ".pytest_cache",
-    ".ruff_cache",
-    ".git",
-    ".idea",
-    ".vscode",
-    "build",
-    "dist",
-    "venv",
-    ".venv",
-}
+# Shared with the signer rather than copied. These two lists were allowed to
+# disagree once and a single `desktop.ini` then made a signed release
+# impossible (2026-09-12) — the manifest describes a release, so what a
+# release leaves out and what a signature leaves out have to be one set.
+# The secret-bearing names below stay here: those are release safety, and the
+# signer WANTS to see a stray `.env` so it can refuse to sign it.
+EXCLUDED_DIRS = set(release_trust.NOT_SIGNED_DIRS)
 
 # Kept out by shape, so a folder nobody remembered to name is still kept out.
 # `.claude-plugin` is the one dot-directory that MUST ship -- it is how Claude
@@ -130,10 +123,7 @@ def _is_private_dir(name: str) -> bool:
 # MS-DOS attribute bit 0, in the low half of a zip entry's external_attr.
 READ_ONLY_BIT = 0x01
 
-EXCLUDED_FILES = {
-    "desktop.ini",
-    "Thumbs.db",
-    ".DS_Store",
+EXCLUDED_FILES = set(release_trust.NOT_SIGNED_NAMES) | {
     "config.yaml",
     "secrets.json",
     # 2026-08-23. `.gitignore` claimed ".env" was "stated here as well as in
@@ -148,8 +138,10 @@ EXCLUDED_FILES = {
     "token.json",
 }
 
-EXCLUDED_SUFFIXES = {".pyc", ".pyo", ".zip", ".tmp", ".session", ".log",
-                     ".jsonl", ".pem", ".key"}
+EXCLUDED_SUFFIXES = set(release_trust.NOT_SIGNED_SUFFIXES) | {
+    # Not signing exclusions: these carry data or keys, and only a release
+    # needs them gone.
+    ".jsonl", ".pem", ".key"}
 
 # Files that must arrive executable on macOS and Linux.
 #

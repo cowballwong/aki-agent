@@ -122,7 +122,8 @@ def test_the_hooks_never_trigger_an_install():
     sys.path.insert(0, str(BIN))
     import _bootstrap                                     # noqa: E402
 
-    for module in ("aki_agent.safety_gate", "aki_agent.pending_hook"):
+    for module in ("aki_agent.safety_gate", "aki_agent.pending_hook",
+                   "aki_agent.config_guard"):
         assert module in _bootstrap.HOOKS
 
     # And the hooks named here are exactly the ones plugin.json runs.

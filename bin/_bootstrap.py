@@ -402,7 +402,8 @@ def remember_where_i_am() -> None:
 # file. So when the environment is not ready they do nothing at all, quietly,
 # and the real install happens where there is no timer on it: the setup skill,
 # the launchers, and `doctor`.
-HOOKS = ("aki_agent.safety_gate", "aki_agent.pending_hook")
+HOOKS = ("aki_agent.safety_gate", "aki_agent.pending_hook",
+         "aki_agent.config_guard")
 
 
 def main(argv: list[str]) -> int:

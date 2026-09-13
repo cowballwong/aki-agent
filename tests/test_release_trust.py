@@ -197,3 +197,61 @@ def test_the_real_release_carries_a_signature():
         f"{newest.name} has no manifest"
     assert any(n.endswith(release_trust.SIGNATURE_NAME) for n in names), \
         f"{newest.name} has no signature"
+
+
+def test_the_signer_and_the_release_exclude_the_same_noise():
+    """One set, not two that are allowed to drift.
+
+    THE FAILURE THIS EXISTS FOR (2026-09-12)
+    ----------------------------------------
+    `release_trust` and `make_release` each kept their own exclusion list.
+    `.gitignore` named `desktop.ini`; `make_release` named it; the signer did
+    not. `bin/sign_repo.py` signs what the signer's list lets through and then
+    refuses if anything it signed is missing from git, so six stray files
+    nobody wrote -- Google Drive's `desktop.ini` scattered through the folder,
+    an old release zip -- made signing 0.49.0 impossible. Nothing was broken;
+    two lists simply disagreed, which is the shape this whole package keeps
+    finding.
+    """
+    import importlib.util
+    from pathlib import Path
+
+    from aki_agent import release_trust
+
+    root = Path(__file__).resolve().parent.parent
+    spec = importlib.util.spec_from_file_location(
+        "make_release_under_test", root / "bin" / "make_release.py")
+    make_release = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(make_release)
+
+    # The noise and build sets are shared outright.
+    assert make_release.EXCLUDED_DIRS == release_trust.NOT_SIGNED_DIRS
+    assert release_trust.NOT_SIGNED_NAMES <= make_release.EXCLUDED_FILES
+    assert release_trust.NOT_SIGNED_SUFFIXES <= make_release.EXCLUDED_SUFFIXES
+
+    # And the secret-bearing names stay OUT of the signer's list on purpose:
+    # a stray `.env` in a checkout must be signed, so that `sign_repo` sees it
+    # is not in git and refuses, rather than quietly leaving it unmentioned.
+    for secret in (".env", "config.yaml", "credentials.json"):
+        assert secret in make_release.EXCLUDED_FILES
+        assert secret not in release_trust.NOT_SIGNED_NAMES
+
+
+def test_the_signer_skips_what_git_ignores():
+    """A checkout carrying ordinary noise can still be signed."""
+    from pathlib import Path
+    from aki_agent import release_trust
+
+    import tempfile
+
+    root = Path(tempfile.mkdtemp())
+    (root / "real.py").write_text("x = 1\n", encoding="utf-8")
+    (root / "desktop.ini").write_text("[.ShellClassInfo]\n", encoding="utf-8")
+    (root / "_release").mkdir()
+    (root / "_release" / "old.zip").write_bytes(b"PK\x03\x04")
+    (root / "venv").mkdir()
+    (root / "venv" / "pyvenv.cfg").write_text("home = /x\n", encoding="utf-8")
+
+    signed = {p.relative_to(root).as_posix()
+              for p in release_trust._files_to_sign(root)}
+    assert signed == {"real.py"}

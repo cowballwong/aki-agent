@@ -1,7 +1,7 @@
 {
   "name": "aki-agent",
-  "description": "A general-purpose personal assistant you install on your own machine. Answer a few questions and it configures itself around your work \u2014 no API key, no server, no Docker. Runs on your own Claude subscription.",
-  "version": "0.48.11",
+  "description": "A general-purpose personal assistant you install on your own machine. Answer a few questions and it configures itself around your work — no API key, no server, no Docker. Runs on your own Claude subscription.",
+  "version": "0.49.0",
   "author": {
     "name": "Anzon Wong"
   },
@@ -20,6 +20,15 @@
           {
             "type": "command",
             "command": "python \"${CLAUDE_PLUGIN_ROOT}/bin/_bootstrap.py\" aki_agent.safety_gate"
+          }
+        ]
+      },
+      {
+        "matcher": "Write",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python \"${CLAUDE_PLUGIN_ROOT}/bin/_bootstrap.py\" aki_agent.config_guard"
           }
         ]
       }

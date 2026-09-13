@@ -335,6 +335,16 @@ OAUTH_FIELD_NAMES = (
     # nothing to find. It is one exact path segment: a real "client" anywhere
     # else in the engine, in that file included, still fails.
     "reverse-geocode-client",
+    # 2026-09-12. Flask's own API for making a request to an application
+    # without binding a port. `doctor` uses it to ask the dashboard for its
+    # first page, which is how "the dashboard is broken" stopped being
+    # something you discover at the launcher.
+    #
+    # Spent here rather than spelled around with `getattr(app, "test_" +
+    # "client")`, which is what somebody quietly working around this test
+    # would write and would leave nothing to find. It is one exact library
+    # method name: a real "client" anywhere in the engine still fails.
+    "test_client",
 )
 
 
@@ -384,11 +394,12 @@ def test_the_spent_phrases_are_exact_and_no_wider():
 
     `client` alone is still an offence -- that is the profession word the rule
     exists for. Only exact strings that no author chose are spent: the two
-    field labels Google prints on its own screen, and one vendor's URL path.
-    This fails if anybody widens that later, which is the point of it.
+    field labels Google prints on its own screen, one vendor's URL path, and
+    one library method name. This fails if anybody widens that later, which is
+    the point of it.
     """
     assert OAUTH_FIELD_NAMES == (
-        "client id", "client secret", "reverse-geocode-client")
+        "client id", "client secret", "reverse-geocode-client", "test_client")
 
     # Still caught.
     assert "client" in _spend_the_exception("a client of the practice")
@@ -399,3 +410,8 @@ def test_the_spent_phrases_are_exact_and_no_wider():
     assert "client" not in _spend_the_exception("the client secret")
     assert "client" not in _spend_the_exception(
         "https://api.bigdatacloud.net/data/reverse-geocode-client")
+    assert "client" not in _spend_the_exception("app.test_client()")
+    # And the exemption does not leak: a variable named `client`, which is
+    # what the first version of `check_dashboard_serves` actually wrote, is
+    # still an offence.
+    assert "client" in _spend_the_exception("with app.test_client() as client:")
