@@ -199,6 +199,33 @@ def test_the_real_release_carries_a_signature():
         f"{newest.name} has no signature"
 
 
+def test_the_real_release_verifies_once_unzipped(tmp_path):
+    """Carrying a signature is the proxy; passing the check is the outcome.
+
+    The test above passed on 0.49.0 and 0.49.1 while every zip carried TWO
+    manifests -- the repo's own, copied in, and the build's -- and the unzipped
+    package failed `verify_package` with "missing: RELEASE.manifest", so
+    `upgrade --from` would have refused it (found 2026-09-13).
+    """
+    from pathlib import Path
+
+    releases = sorted(Path(__file__).resolve().parent.parent
+                      .glob("_release/*.zip"))
+    if not releases:
+        pytest.skip("no release built here")
+
+    newest = releases[-1]
+    with zipfile.ZipFile(newest) as archive:
+        names = archive.namelist()
+        assert len(names) == len(set(names)), "duplicate entries in the zip"
+        archive.extractall(tmp_path)
+    top = next(p for p in tmp_path.iterdir() if p.is_dir())
+    verdict = release_trust.verify_package(top)
+    if verdict.problem and "not signed" in verdict.problem:
+        pytest.skip("built on a machine without the signing key")
+    assert verdict.trusted, verdict.problem
+
+
 def test_the_signer_and_the_release_exclude_the_same_noise():
     """One set, not two that are allowed to drift.
 
@@ -227,6 +254,9 @@ def test_the_signer_and_the_release_exclude_the_same_noise():
     # The noise and build sets are shared outright.
     assert make_release.EXCLUDED_DIRS == release_trust.NOT_SIGNED_DIRS
     assert release_trust.NOT_SIGNED_NAMES <= make_release.EXCLUDED_FILES
+    # The repo's own signature files must not travel into a zip that gets a
+    # manifest of its own -- see test_the_real_release_verifies_once_unzipped.
+    assert release_trust.NOT_SIGNED <= make_release.EXCLUDED_FILES
     assert release_trust.NOT_SIGNED_SUFFIXES <= make_release.EXCLUDED_SUFFIXES
 
     # And the secret-bearing names stay OUT of the signer's list on purpose:

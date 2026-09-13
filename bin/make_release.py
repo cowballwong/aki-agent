@@ -123,7 +123,13 @@ def _is_private_dir(name: str) -> bool:
 # MS-DOS attribute bit 0, in the low half of a zip entry's external_attr.
 READ_ONLY_BIT = 0x01
 
-EXCLUDED_FILES = set(release_trust.NOT_SIGNED_NAMES) | {
+# `NOT_SIGNED` too (2026-09-13). Since the repo carries its own RELEASE.manifest
+# and RELEASE.sig, the build copied them in AND listed them in the zip's own
+# manifest, then wrote a second pair on top. The verifier rightly ignores those
+# two names, so every zip reported them "missing" and `upgrade --from` refused
+# a release this script had just signed. Found by extracting 0.49.1 and running
+# the real check rather than trusting "Signed 514 files".
+EXCLUDED_FILES = set(release_trust.NOT_SIGNED_NAMES) | set(release_trust.NOT_SIGNED) | {
     "config.yaml",
     "secrets.json",
     # 2026-08-23. `.gitignore` claimed ".env" was "stated here as well as in

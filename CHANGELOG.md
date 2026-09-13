@@ -571,6 +571,13 @@ where the people who need them read them. Windows 76 lines to 52, macOS 65 to
   name back over the edit. `backend.stored()` now reads the model from the
   launcher's settings line when there is one, so scheduled tasks, `doctor` and
   a regenerated launcher all follow it.
+- **A release that could not be installed, fixed on the way out.** Since the
+  repo started carrying its own `RELEASE.manifest` and `RELEASE.sig`, the build
+  copied them into the zip, hashed them into the zip's manifest, and wrote a
+  second pair on top. The verifier ignores those two names, so the unzipped
+  package failed with "missing: RELEASE.manifest" and `upgrade --from` would
+  refuse it. 0.49.0 was built the same way. The old test asked whether the zip
+  *carried* a signature; the new one unzips it and runs the real check.
 - `tests/test_model_line.py` holds all of that on both platforms: one line
   near the top, scheduled work uses an edited line, a rewrite keeps it, an
   ordinary install has none, and the file stays mostly commands.
