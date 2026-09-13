@@ -241,9 +241,32 @@ def stored() -> Backend:
     saved = atomic.read_json(_record_file(), default=None)
     if not isinstance(saved, dict):
         return Backend()
-    return Backend(
+    found = Backend(
         base_url=str(saved.get("base_url") or ""),
         model=str(saved.get("model") or ""),
         needs_token=bool(saved.get("needs_token")),
         token=str(saved.get("token") or ""),
     )
+    # The launcher's settings line wins over the record (2026-09-13). It is
+    # the one place a student is told to change the model, so scheduled work,
+    # `doctor` and a regenerated launcher all have to read it from there --
+    # otherwise the double-click runs the new model, the night's tasks run the
+    # old one, and the next upgrade writes the old one back over their edit.
+    if not found.is_default:
+        edited = launcher_model()
+        if edited:
+            found.model = edited
+    return found
+
+
+def launcher_model() -> str:
+    """The model named on the launcher's settings line, or "" if none."""
+    try:
+        from . import launcher
+
+        path = launcher.launcher_path()
+        if not path.exists():
+            return ""
+        return launcher.model_in(path.read_text(encoding="utf-8", errors="replace"))
+    except Exception:                                     # noqa: BLE001
+        return ""

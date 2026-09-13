@@ -546,6 +546,35 @@ and the tests. The test above is what catches it when it is not.
 
 ---
 
+## 0.49.1 - 2026-09-13 - one line to change the model
+
+Looking at the launcher the package writes, a user asked two things: does it
+really need to be that long, and could Ollama users be given one line to edit
+to switch to another model?
+
+Every command in it was needed. The prose around them was not: about a third
+of the file was the history of why each line exists, written into the one file
+a student opens to change something. The reasons now live in `launcher.py`,
+where the people who need them read them. Windows 76 lines to 52, macOS 65 to
+41, and not one command removed.
+
+- **A settings block at the top.** For an Ollama or custom-endpoint install,
+  `set AKI_MODEL=qwen3.5` (Windows) or `AKI_MODEL="qwen3.5"` (macOS), with the
+  hint `Any name from: ollama list`, above a line that says there is no need to
+  edit below it. The `claude` command uses the variable, not a literal, so
+  there is no second copy of the name to fall out of step. An ordinary install
+  gets no block and no `--model`, exactly as before.
+- **The line is the answer, not a copy of it.** An edit that only the
+  double-click honoured would be worse than no line at all: the night's
+  scheduled work would go on running the old model out of
+  `state/backend.json`, and the next repair or upgrade would write the old
+  name back over the edit. `backend.stored()` now reads the model from the
+  launcher's settings line when there is one, so scheduled tasks, `doctor` and
+  a regenerated launcher all follow it.
+- `tests/test_model_line.py` holds all of that on both platforms: one line
+  near the top, scheduled work uses an edited line, a rewrite keeps it, an
+  ordinary install has none, and the file stays mostly commands.
+
 ## 0.49.0 - 2026-09-12 - found out at the launcher
 
 Asked what actually goes wrong most often, a user named two things: the

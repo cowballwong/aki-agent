@@ -173,17 +173,16 @@ def _preflight_block(package_root: Path, windows: bool) -> str:
     before the session opens. A warning the user reads at launch is worth more
     than a silent absence they discover a week later.
     """
+    # The explanation lives here, not in the file. The generated launcher is
+    # the one thing a student opens to change a setting, and every line of
+    # prose in it was a line to scroll past looking for that setting
+    # (a user, 2026-09-13: it is very long in there -- is that necessary?).
     if windows:
         return (
-            "\r\n"
-            "REM Say something if the messaging channel is not connected --\r\n"
-            "REM silence here is indistinguishable from working.\r\n"
             f'python "{package_root}\\bin\\_bootstrap.py" '
             "aki_agent.cli channel-check\r\n"
         )
     return (
-        "\n# Say something if the messaging channel is not connected --\n"
-        "# silence here is indistinguishable from working.\n"
         f'python3 "{package_root}/bin/_bootstrap.py" '
         "aki_agent.cli channel-check\n"
     )
@@ -309,38 +308,28 @@ def channel_block(windows: bool, assistant_name: str = "") -> str:
     # by hand, so that running setup again cannot quietly drop it.
     folder = telegram_setup.channel_name(assistant_name)
 
+    # Emitted without comments: the reasons are above, where they are read.
+    # The first line keeps this assistant's Telegram state in its own folder
+    # so it cannot take over another assistant's bot; the rest decides at
+    # every start whether the inbound channel flag applies.
     if windows:
         return (
-            "REM Keep this assistant\'s Telegram state in its own folder,\r\n"
-            "REM so it cannot take over another assistant\'s bot here.\r\n"
             "set TELEGRAM_STATE_DIR=%USERPROFILE%\\.claude\\channels\\"
             f"{folder}\r\n"
-            "\r\n"
-
-            "REM Inbound messages need this flag, and whether it applies\r\n"
-            "REM can change after setup -- so it is decided here, every\r\n"
-            "REM start.\r\n"
             "set AKI_CHANNELS=\r\n"
             f'findstr /C:"{PLUGIN_ID}" '
             '"%USERPROFILE%\\.claude\\plugins\\installed_plugins.json" '
             ">nul 2>&1\r\n"
             "if not errorlevel 1 set "
             f"AKI_CHANNELS=--channels {CHANNEL_SERVER}\r\n"
-            "\r\n"
         )
     return (
-        "# Keep this assistant\'s Telegram state in its own folder, so it\n"
-        "# cannot take over another assistant\'s bot on this machine.\n"
         f'export TELEGRAM_STATE_DIR=\"$HOME/.claude/channels/{folder}\"\n'
-        "\n"
-        "# Inbound messages need this flag, and whether it applies can change\n"
-        "# after setup -- so it is decided here, every start.\n"
         'AKI_CHANNELS=""\n'
         f'if grep -q "{PLUGIN_ID}" '
         '"$HOME/.claude/plugins/installed_plugins.json" 2>/dev/null; then\n'
         f'  AKI_CHANNELS="--channels {CHANNEL_SERVER}"\n'
         "fi\n"
-        "\n"
     )
 
 
@@ -361,14 +350,71 @@ def backend_block(windows: bool) -> str:
         return ""
 
     break_ = "\r\n" if windows else "\n"
-    lines = [("REM " if windows else "# ") + brain.sentence() + break_]
+    lines = []
     for name, value in settings.items():
         if windows:
             lines.append(f"set {name}={value}{break_}")
         else:
             lines.append(f'export {name}="{value}"{break_}')
-    lines.append(break_)
     return "".join(lines)
+
+
+# The one setting a student is expected to change by hand (a user, 2026-09-13:
+# Ollama users should be able to switch model themselves by editing one line).
+#
+# It is a variable at the top of the launcher, and the launcher is what
+# `backend.stored()` reads the model back from -- so the line is not a copy
+# that drifts from `state/backend.json`. Scheduled work uses whatever it says,
+# and a repair or upgrade that rewrites the launcher writes the same value
+# back. An edit that only the double-click honoured, and the night's tasks and
+# the next upgrade quietly ignored, would be worse than no line at all.
+MODEL_VARIABLE = "AKI_MODEL"
+
+
+def settings_block(windows: bool) -> str:
+    """The editable part at the top of the launcher. Empty unless there is a model to choose."""
+    from . import backend as backend_module
+
+    brain = backend_module.stored()
+    if brain.is_default or not brain.model:
+        return ""
+    where = ("ollama list" if brain.is_ollama else "your endpoint's model list")
+    if windows:
+        return (
+            "REM ---- Settings you can change ------------------------------\r\n"
+            f"REM  Model to use. Any name from: {where}\r\n"
+            f"set {MODEL_VARIABLE}={brain.model}\r\n"
+            "REM ---- No need to edit below this line -----------------------\r\n"
+            "\r\n"
+        )
+    return (
+        "# ---- Settings you can change ------------------------------\n"
+        f"#  Model to use. Any name from: {where}\n"
+        f'{MODEL_VARIABLE}="{brain.model}"\n'
+        "# ---- No need to edit below this line -----------------------\n"
+        "\n"
+    )
+
+
+def model_arguments(windows: bool) -> list[str]:
+    """`--model` pointing at the settings variable rather than at a literal."""
+    from . import backend as backend_module
+
+    brain = backend_module.stored()
+    if brain.is_default or not brain.model:
+        return []
+    return ["--model", f"%{MODEL_VARIABLE}%" if windows
+            else f'"${MODEL_VARIABLE}"']
+
+
+def model_in(text: str) -> str:
+    """The model a launcher's settings line names, or ""."""
+    import re
+
+    found = re.search(
+        rf'^\s*(?:set\s+)?{MODEL_VARIABLE}=["\']?([^"\'\r\n]*?)["\']?\s*$',
+        text, re.MULTILINE | re.IGNORECASE)
+    return found.group(1).strip() if found else ""
 
 
 def _stop_note() -> str:
@@ -386,9 +432,10 @@ def windows_launcher(options: LauncherOptions,
     workspace = str(options.workspace) if options.workspace else "%USERPROFILE%"
     # The model is chosen on the command line, never in the environment, so it
     # has to be written in beside the variables or the launcher reaches the
-    # right endpoint and asks it for the wrong model.
+    # right endpoint and asks it for the wrong model. It names the settings
+    # variable at the top of the file, so changing the model is one line.
     arguments = " ".join(claude_arguments(options)
-                         + backend_module.stored().arguments())
+                         + model_arguments(windows=True))
     stop_note = _stop_note()
     preflight = (_preflight_block(package_root, windows=True)
                  if options.check_channel else "")
@@ -401,8 +448,6 @@ def windows_launcher(options: LauncherOptions,
         # exists on no machine. It opened nothing, silently, which is the same
         # failure this package keeps finding in itself.
         dashboard_block = (
-            "\r\n"
-            "REM Start the dashboard in its own window, then carry on.\r\n"
             # Through the hidden-window wrapper rather than `/min`: a
             # minimised console is still a console on the taskbar, and it
             # steals focus on the way there. The only terminal a person
@@ -424,13 +469,10 @@ def windows_launcher(options: LauncherOptions,
 
     return (
         "@echo off\r\n"
-        "REM ------------------------------------------------------------\r\n"
-        f"REM  Start {options.title}\r\n"
-        "REM\r\n"
-        "REM  This file was written for you during setup. It is yours --\r\n"
-        "REM  edit it freely. Running setup again will offer to rewrite it.\r\n"
-        "REM ------------------------------------------------------------\r\n"
+        f"REM  Start {options.title}. Written for you during setup; running\r\n"
+        "REM  setup again rewrites it and keeps the settings below.\r\n"
         "\r\n"
+        f"{settings_block(windows=True)}"
         # Double-clicking a .bat gets the old console host, which is where
         # non-Latin text still breaks, the window cannot be resized sensibly
         # and scrollback is tiny. Windows Terminal is what a person actually
@@ -466,16 +508,13 @@ def windows_launcher(options: LauncherOptions,
         # Defined up front so the tidy-exit test below cannot read an empty
         # value and report a failure on the path that never ran a session.
         "set AKI_RC=0\r\n"
-        "REM Show non-Latin characters properly.\r\n"
+        # UTF-8, so non-Latin text shows properly.
         "chcp 65001 >nul 2>&1\r\n"
-        "\r\n"
         "where claude >nul 2>&1\r\n"
         "if errorlevel 1 goto noclaude\r\n"
-        "\r\n"
         f'cd /d "{workspace}"\r\n'
         f"{preflight}"
         f"{dashboard_block}"
-        "\r\n"
         f"{backend_block(windows=True)}"
         f"{channel_block(windows=True, assistant_name=options.title)}"
         # CALL is load-bearing. On Windows `claude` on PATH is a .cmd shim, and
@@ -488,12 +527,8 @@ def windows_launcher(options: LauncherOptions,
         "goto done\r\n"
         "\r\n"
         ":noclaude\r\n"
-        "echo.\r\n"
         "echo   Claude Code is not installed, or Windows cannot find it.\r\n"
-        "echo.\r\n"
-        "echo   Get it from https://claude.com/claude-code\r\n"
-        "echo   then sign in with your Claude account.\r\n"
-        "echo.\r\n"
+        "echo   Get it from https://claude.com/claude-code and sign in.\r\n"
         "pause\r\n"
         "\r\n"
         ":done\r\n"
@@ -529,11 +564,8 @@ def windows_launcher(options: LauncherOptions,
         "  exit /b 0\r\n"
         ")\r\n"
         "if not \"%AKI_RC%\"==\"0\" (\r\n"
-        "  echo.\r\n"
-        "  echo   The session ended with code %AKI_RC%.\r\n"
-        "  echo   If it never started at all, Claude Code may be missing,\r\n"
-        "  echo   mid-update, or signed out -- try running: claude --version\r\n"
-        "  echo.\r\n"
+        "  echo   The session ended with code %AKI_RC%. If it never started,\r\n"
+        "  echo   Claude Code may be missing or signed out: claude --version\r\n"
         "  echo   This window closes in 30 seconds.\r\n"
         "  timeout /t 30 >nul 2>&1\r\n"
         ")\r\n"
@@ -548,44 +580,30 @@ def macos_launcher(options: LauncherOptions, package_root: Path) -> str:
     from . import backend as backend_module
 
     arguments = " ".join(claude_arguments(options)
-                         + backend_module.stored().arguments())
+                         + model_arguments(windows=False))
     preflight = (_preflight_block(package_root, windows=False)
                  if options.check_channel else "")
 
     dashboard_block = ""
     if options.open_dashboard:
-        dashboard_block = (
-            "\n# Start the dashboard in the background, then carry on.\n"
-            f'"{package_root}/bin/dashboard.command" &\n'
-        )
+        # In the background, then carry on.
+        dashboard_block = f'"{package_root}/bin/dashboard.command" &\n'
 
     return (
         "#!/bin/bash\n"
-        "# ------------------------------------------------------------\n"
-        f"#  Start {options.title}\n"
-        "#\n"
-        "#  This file was written for you during setup. It is yours --\n"
-        "#  edit it freely. Running setup again will offer to rewrite it.\n"
-        "#\n"
-        "#  If macOS refuses to open it, right-click and choose Open. That\n"
-        "#  is Gatekeeper asking once about a file it did not download.\n"
-        "# ------------------------------------------------------------\n"
+        f"#  Start {options.title}. Written for you during setup; running\n"
+        "#  setup again rewrites it and keeps the settings below.\n"
+        "#  If macOS refuses to open it: right-click, Open (asked once).\n"
         "\n"
+        f"{settings_block(windows=False)}"
         "if ! command -v claude >/dev/null 2>&1; then\n"
-        "  echo\n"
-        "  echo \"  Claude Code is not installed.\"\n"
-        "  echo\n"
-        "  echo \"  Get it from https://claude.com/claude-code\"\n"
-        "  echo \"  then sign in with your Claude account.\"\n"
-        "  echo\n"
+        "  echo \"  Claude Code is not installed. Get it from https://claude.com/claude-code and sign in.\"\n"
         "  read -r -p \"  Press return to close. \"\n"
         "  exit 1\n"
         "fi\n"
-        "\n"
         f'cd "{workspace}" || exit 1\n'
         f"{preflight}"
         f"{dashboard_block}"
-        "\n"
         f"{backend_block(windows=False)}"
         f"{channel_block(windows=False, assistant_name=options.title)}"
         f"claude $AKI_CHANNELS {arguments}\n"
@@ -612,11 +630,8 @@ def macos_launcher(options: LauncherOptions, package_root: Path) -> str:
         # keeps it otherwise -- so this says what happened, holds long enough
         # to be read, and then leaves cleanly either way.
         "if [ \"$AKI_RC\" -ne 0 ]; then\n"
-        "  echo\n"
-        "  echo \"  The session ended with code $AKI_RC.\"\n"
-        "  echo \"  If it never started at all, Claude Code may be missing,\"\n"
-        "  echo \"  mid-update, or signed out -- try running: claude --version\"\n"
-        "  echo\n"
+        "  echo \"  The session ended with code $AKI_RC. If it never started,\"\n"
+        "  echo \"  Claude Code may be missing or signed out: claude --version\"\n"
         "  echo \"  This window closes in 30 seconds.\"\n"
         "  sleep 30\n"
         "fi\n"
